@@ -1,7 +1,9 @@
 package org.eardream.devvault.user.entity;
 
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -10,8 +12,6 @@ import java.util.Set;
 @Table(name = "roles")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@AllArgsConstructor
-@Builder
 public class Role {
 
     @Id
@@ -24,4 +24,7 @@ public class Role {
     @OneToMany(mappedBy = "role")
     private Set<UserRole> users = new HashSet<>();
 
+    public Role(String role) {
+        this.role = role;
+    }
 }
