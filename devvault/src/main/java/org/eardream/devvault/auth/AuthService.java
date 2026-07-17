@@ -1,0 +1,57 @@
+package org.eardream.devvault.auth;
+
+import lombok.RequiredArgsConstructor;
+import org.eardream.devvault.user.entity.Role;
+import org.eardream.devvault.user.entity.User;
+import org.eardream.devvault.user.entity.UserRole;
+import org.eardream.devvault.user.repository.RoleRepository;
+import org.eardream.devvault.user.repository.UserRepository;
+import org.eardream.devvault.user.repository.UserRoleRepository;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.util.Locale;
+
+@Service
+@RequiredArgsConstructor
+public class AuthService {
+
+    private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
+    private final UserRoleRepository userRoleRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final AuthenticationManager authenticationManager;
+    private final JwtService jwtService;
+
+    @Transactional
+    public AuthToken signup(String email, String password, String username) {
+        String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
+        if (userRepository.existsByEmail(normalizedEmail)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 사용 중인 이메일입니다.");
+        }
+
+        User user = userRepository.save(User.builder()
+                .email(normalizedEmail)
+                .password(passwordEncoder.encode(password))
+                .username(username.trim())
+                .build());
+        Role role = roleRepository.findByRole("ROLE_USER")
+                .orElseThrow(() -> new IllegalStateException("ROLE_USER가 초기화되지 않았습니다."));
+        UserRole userRole = userRoleRepository.save(UserRole.builder().user(user).role(role).build());
+        user.getUserRoles().add(userRole);
+        return jwtService.createToken(user);
+    }
+
+    public AuthToken login(String email, String password) {
+        User user = (User) authenticationManager.authenticate(
+                UsernamePasswordAuthenticationToken.unauthenticated(
+                        email.trim().toLowerCase(Locale.ROOT), password))
+                .getPrincipal();
+        return jwtService.createToken(user);
+    }
+}
