@@ -1,4 +1,41 @@
 services:
+  app:
+    build:
+      context: .
+    image: devvault:local
+    restart: unless-stopped
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-5}
+      JPA_DDL_AUTO: ${JPA_DDL_AUTO:-update}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_TOKEN_EXPIRATION_MS: ${JWT_ACCESS_TOKEN_EXPIRATION_MS:-900000}
+      JWT_REFRESH_TOKEN_EXPIRATION_MS: ${JWT_REFRESH_TOKEN_EXPIRATION_MS:-1209600000}
+      UPLOAD_DIR: /data/uploads
+      MAX_FILE_SIZE: ${MAX_FILE_SIZE:-200MB}
+      MAX_REQUEST_SIZE: ${MAX_REQUEST_SIZE:-200MB}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+    volumes:
+      - uploads-data:/data/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 45s
+
   mysql:
     image: mysql:8.4
     restart: unless-stopped
@@ -21,3 +58,4 @@ services:
 
 volumes:
   mysql-data:
+  uploads-data:
