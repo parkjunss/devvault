@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -92,5 +93,15 @@ class AuthServiceTest {
         authService.logout("refresh-token");
 
         verify(refreshTokenService).revoke("refresh-token");
+    }
+
+    @Test
+    void tokenCreationRejectsDisabledUser() {
+        User user = User.builder().email("user@example.com").password("encoded").username("user").build();
+        user.setEnabled(false);
+
+        assertThrows(ResponseStatusException.class, () -> authService.createTokens(user));
+
+        verify(refreshTokenService, never()).issue(user);
     }
 }

@@ -52,6 +52,20 @@ public interface StoredFileRepository extends JpaRepository<StoredFile, Long> {
             """)
     UsageSummary summarizeActiveUsage(@Param("ownerEmail") String ownerEmail);
 
+    @Query("""
+            select count(file) as fileCount, coalesce(sum(file.size), 0) as usedBytes
+            from StoredFile file
+            """)
+    UsageSummary summarizeAllUsage();
+
+    @Query("""
+            select file from StoredFile file
+            where :query is null
+               or locate(:query, lower(file.originalName)) > 0
+               or locate(:query, lower(file.owner.email)) > 0
+            """)
+    Page<StoredFile> searchAll(@Param("query") String query, Pageable pageable);
+
     Optional<StoredFile> findByIdAndOwnerEmail(Long id, String email);
 
     @EntityGraph(attributePaths = "tags")

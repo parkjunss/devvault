@@ -30,6 +30,10 @@ public class User implements UserDetails {
     @Column(nullable = false, length = 50)
     private String username;
 
+    @Column(nullable = false, columnDefinition = "boolean default true")
+    @Builder.Default
+    private boolean enabled = true;
+
     @OneToMany(mappedBy = "user")
     @Builder.Default
     private List<UserRole> userRoles = new ArrayList<>();
@@ -61,6 +65,10 @@ public class User implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return UserDetails.super.isEnabled();
+        return enabled;
+    }
+
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
     }
 }

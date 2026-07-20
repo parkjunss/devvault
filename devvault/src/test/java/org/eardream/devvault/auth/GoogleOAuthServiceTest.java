@@ -91,6 +91,19 @@ class GoogleOAuthServiceTest {
                 () -> googleOAuthService.login(googlePrincipal(false)));
     }
 
+    @Test
+    void rejectsDisabledGoogleUser() {
+        User user = User.builder().id(7L).email("user@example.com").password("encoded").username("User").build();
+        user.setEnabled(false);
+        when(oauthAccountRepository.findByProviderAndProviderUserId("google", "google-1"))
+                .thenReturn(Optional.of(OauthAccount.builder().userId(7L).provider("google")
+                        .providerUserId("google-1").providerEmail("user@example.com").build()));
+        when(userRepository.findById(7L)).thenReturn(Optional.of(user));
+
+        assertThrows(org.springframework.security.oauth2.core.OAuth2AuthenticationException.class,
+                () -> googleOAuthService.login(googlePrincipal()));
+    }
+
     private OAuth2User googlePrincipal() {
         return googlePrincipal(true);
     }

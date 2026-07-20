@@ -66,6 +66,9 @@ public class AuthService {
     }
 
     AuthToken createTokens(User user) {
+        if (!user.isEnabled()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "비활성화된 사용자입니다.");
+        }
         return jwtService.createToken(user, refreshTokenService.issue(user));
     }
 }

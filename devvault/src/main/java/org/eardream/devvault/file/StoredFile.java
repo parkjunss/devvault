@@ -93,7 +93,7 @@ public class StoredFile {
         tags.remove(tag);
     }
 
-    void softDelete() {
+    public void softDelete() {
         if (deletedAt == null) {
             deletedAt = Instant.now();
         }

@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -68,5 +69,22 @@ class RefreshTokenServiceTest {
                 .thenReturn(Optional.of(stored));
 
         assertThrows(ResponseStatusException.class, () -> refreshTokenService.rotate("old-token"));
+    }
+
+    @Test
+    void rotateRejectsDisabledUser() {
+        RefreshTokenService refreshTokenService = new RefreshTokenService(refreshTokenRepository, 60_000L);
+        User user = User.builder().email("user@example.com").password("encoded").username("user").build();
+        user.setEnabled(false);
+        RefreshToken stored = RefreshToken.builder()
+                .user(user)
+                .tokenHash(RefreshTokenService.hash("old-token"))
+                .expiresAt(Instant.now().plusSeconds(60))
+                .build();
+        when(refreshTokenRepository.findByTokenHash(RefreshTokenService.hash("old-token")))
+                .thenReturn(Optional.of(stored));
+
+        assertThrows(ResponseStatusException.class, () -> refreshTokenService.rotate("old-token"));
+        verify(refreshTokenRepository, never()).save(any());
     }
 }

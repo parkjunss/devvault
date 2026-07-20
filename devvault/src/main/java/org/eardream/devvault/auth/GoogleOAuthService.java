@@ -39,10 +39,15 @@ public class GoogleOAuthService {
             throw invalidUserInfo();
         }
 
-        return oauthAccountRepository.findByProviderAndProviderUserId(PROVIDER, providerUserId)
+        User user = oauthAccountRepository.findByProviderAndProviderUserId(PROVIDER, providerUserId)
                 .map(account -> userRepository.findById(account.getUserId())
                         .orElseThrow(GoogleOAuthService::invalidUserInfo))
                 .orElseGet(() -> linkAccount(principal, providerUserId, email));
+        if (!user.isEnabled()) {
+            throw new OAuth2AuthenticationException(
+                    new OAuth2Error("account_disabled"), "비활성화된 사용자입니다.");
+        }
+        return user;
     }
 
     private User linkAccount(OAuth2User principal, String providerUserId, String email) {

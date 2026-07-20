@@ -49,6 +49,9 @@ public class RefreshTokenService {
             // ponytail: expired rows stay inert; add scheduled cleanup when table growth matters.
             throw invalidToken();
         }
+        if (!stored.getUser().isEnabled()) {
+            throw invalidToken();
+        }
         refreshTokenRepository.delete(stored);
         return new RotatedToken(stored.getUser(), issue(stored.getUser()));
     }
