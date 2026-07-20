@@ -81,4 +81,20 @@ class TagServiceTest {
 
         assertFalse(file.getTags().contains(tag));
     }
+
+    @Test
+    void rejectsTaggingATrashedFile() {
+        TagRepository tagRepository = mock(TagRepository.class);
+        StoredFileRepository fileRepository = mock(StoredFileRepository.class);
+        String email = "owner@example.com";
+        StoredFile file = StoredFile.builder().id(7L).originalName("code.java").build();
+        file.softDelete();
+        when(fileRepository.findByIdAndOwnerEmail(7L, email)).thenReturn(Optional.of(file));
+        TagService service = new TagService(tagRepository, fileRepository, mock(UserRepository.class));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> service.attach(email, 7L, 3L));
+
+        assertEquals(404, exception.getStatusCode().value());
+    }
 }

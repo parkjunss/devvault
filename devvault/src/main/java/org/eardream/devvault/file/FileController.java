@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.CacheControl;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -13,6 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -91,6 +93,48 @@ public class FileController {
                 .body(new InputStreamResource(Files.newInputStream(download.path())));
     }
 
+    @GetMapping("/{id}/preview")
+    ResponseEntity<InputStreamResource> preview(@AuthenticationPrincipal Jwt jwt,
+                                                @PathVariable Long id) throws IOException {
+        FileStorageService.StoredPreview preview = fileStorageService.preview(jwt.getSubject(), id);
+        ContentDisposition disposition = ContentDisposition.inline()
+                .filename(preview.metadata().getOriginalName(), StandardCharsets.UTF_8)
+                .build();
+        return ResponseEntity.ok()
+                .contentType(preview.mediaType())
+                .contentLength(preview.metadata().getSize())
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .header("X-Content-Type-Options", "nosniff")
+                .header("Content-Security-Policy", "sandbox; default-src 'none'")
+                .body(new InputStreamResource(Files.newInputStream(preview.path())));
+    }
+
+    @DeleteMapping("/{id}")
+    ResponseEntity<Void> softDelete(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
+        fileStorageService.softDelete(jwt.getSubject(), id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/trash")
+    Page<TrashFileResponse> trash(@AuthenticationPrincipal Jwt jwt,
+                                  @PageableDefault(size = 20, sort = "deletedAt", direction = Sort.Direction.DESC)
+                                  Pageable pageable) {
+        return fileStorageService.trash(jwt.getSubject(), pageable).map(TrashFileResponse::from);
+    }
+
+    @PostMapping("/{id}/restore")
+    ResponseEntity<Void> restore(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
+        fileStorageService.restore(jwt.getSubject(), id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/{id}/permanent")
+    ResponseEntity<Void> deletePermanently(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
+        fileStorageService.deletePermanently(jwt.getSubject(), id);
+        return ResponseEntity.noContent().build();
+    }
+
     private static MediaType parseMediaType(String contentType) {
         try {
             return contentType == null ? MediaType.APPLICATION_OCTET_STREAM : MediaType.parseMediaType(contentType);
@@ -132,6 +176,13 @@ public class FileController {
             return new FileDetailResponse(file.getId(), file.getOriginalName(),
                     file.getFolder() == null ? null : file.getFolder().getId(), file.getContentType(),
                     file.getSize(), file.getChecksum(), file.getCreatedAt(), tags);
+        }
+    }
+
+    public record TrashFileResponse(Long id, String originalName, Long folderId, long size, Instant deletedAt) {
+        static TrashFileResponse from(StoredFile file) {
+            return new TrashFileResponse(file.getId(), file.getOriginalName(),
+                    file.getFolder() == null ? null : file.getFolder().getId(), file.getSize(), file.getDeletedAt());
         }
     }
 }

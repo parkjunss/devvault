@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -16,7 +17,9 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -83,7 +86,7 @@ class FileStorageServiceTest {
         UserRepository userRepository = mock(UserRepository.class);
         var pageable = PageRequest.of(0, 20);
         var ownedFile = StoredFile.builder().id(1L).originalName("mine.txt").storedName("stored").build();
-        when(fileRepository.findAllByOwnerEmail("owner@example.com", pageable))
+        when(fileRepository.findAllByOwnerEmailAndDeletedAtIsNull("owner@example.com", pageable))
                 .thenReturn(new PageImpl<>(List.of(ownedFile), pageable, 1));
         FileStorageService service = service(fileRepository, userRepository);
 
@@ -136,7 +139,7 @@ class FileStorageServiceTest {
                 .tags(Set.of(Tag.builder().id(2L).name("spring").build(),
                         Tag.builder().id(1L).name("java").build()))
                 .build();
-        when(fileRepository.findOneByIdAndOwnerEmail(7L, email)).thenReturn(Optional.of(file));
+        when(fileRepository.findOneByIdAndOwnerEmailAndDeletedAtIsNull(7L, email)).thenReturn(Optional.of(file));
         FileStorageService service = service(fileRepository, mock(UserRepository.class));
 
         FileController.FileDetailResponse response = FileController.FileDetailResponse.from(
@@ -192,6 +195,99 @@ class FileStorageServiceTest {
         StoredFile result = service.update(email, 7L, null, true, null);
 
         assertNull(result.getFolder());
+    }
+
+    @Test
+    void previewsCodeAsPlainText() throws Exception {
+        StoredFileRepository fileRepository = mock(StoredFileRepository.class);
+        String email = "owner@example.com";
+        StoredFile file = StoredFile.builder().id(7L).originalName("Main.java").storedName("stored")
+                .contentType("application/octet-stream").size(4).build();
+        when(fileRepository.findByIdAndOwnerEmail(7L, email)).thenReturn(Optional.of(file));
+        Files.writeString(tempDir.resolve("stored"), "code");
+        FileStorageService service = service(fileRepository, mock(UserRepository.class));
+
+        FileStorageService.StoredPreview preview = service.preview(email, 7L);
+
+        assertEquals(MediaType.TEXT_PLAIN, preview.mediaType());
+        assertEquals(tempDir.resolve("stored"), preview.path());
+    }
+
+    @Test
+    void rejectsUnsupportedPreviewType() throws Exception {
+        StoredFileRepository fileRepository = mock(StoredFileRepository.class);
+        String email = "owner@example.com";
+        StoredFile file = StoredFile.builder().id(7L).originalName("archive.zip").storedName("stored")
+                .contentType("application/zip").size(4).build();
+        when(fileRepository.findByIdAndOwnerEmail(7L, email)).thenReturn(Optional.of(file));
+        Files.writeString(tempDir.resolve("stored"), "data");
+        FileStorageService service = service(fileRepository, mock(UserRepository.class));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> service.preview(email, 7L));
+
+        assertEquals(415, exception.getStatusCode().value());
+    }
+
+    @Test
+    void softDeletesAndRestoresAnOwnedFile() {
+        StoredFileRepository fileRepository = mock(StoredFileRepository.class);
+        String email = "owner@example.com";
+        StoredFile file = StoredFile.builder().id(7L).originalName("notes.txt").build();
+        when(fileRepository.findByIdAndOwnerEmail(7L, email)).thenReturn(Optional.of(file));
+        FileStorageService service = service(fileRepository, mock(UserRepository.class));
+
+        service.softDelete(email, 7L);
+        assertNotNull(file.getDeletedAt());
+        service.restore(email, 7L);
+
+        assertNull(file.getDeletedAt());
+    }
+
+    @Test
+    void hidesTrashedFileFromNormalDetails() {
+        StoredFileRepository fileRepository = mock(StoredFileRepository.class);
+        String email = "owner@example.com";
+        StoredFile file = StoredFile.builder().id(7L).originalName("notes.txt").build();
+        file.softDelete();
+        when(fileRepository.findByIdAndOwnerEmail(7L, email)).thenReturn(Optional.of(file));
+        FileStorageService service = service(fileRepository, mock(UserRepository.class));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> service.get(email, 7L));
+
+        assertEquals(404, exception.getStatusCode().value());
+    }
+
+    @Test
+    void listsOnlyTrashedFiles() {
+        StoredFileRepository fileRepository = mock(StoredFileRepository.class);
+        String email = "owner@example.com";
+        var pageable = PageRequest.of(0, 20);
+        StoredFile file = StoredFile.builder().id(7L).originalName("notes.txt").build();
+        file.softDelete();
+        when(fileRepository.findAllByOwnerEmailAndDeletedAtIsNotNull(email, pageable))
+                .thenReturn(new PageImpl<>(List.of(file), pageable, 1));
+        FileStorageService service = service(fileRepository, mock(UserRepository.class));
+
+        assertEquals(List.of(file), service.trash(email, pageable).getContent());
+    }
+
+    @Test
+    void permanentlyDeletesTrashedMetadataAndPhysicalFile() throws Exception {
+        StoredFileRepository fileRepository = mock(StoredFileRepository.class);
+        String email = "owner@example.com";
+        StoredFile file = StoredFile.builder().id(7L).originalName("notes.txt").storedName("stored").build();
+        file.softDelete();
+        when(fileRepository.findByIdAndOwnerEmail(7L, email)).thenReturn(Optional.of(file));
+        Files.writeString(tempDir.resolve("stored"), "data");
+        FileStorageService service = service(fileRepository, mock(UserRepository.class));
+
+        service.deletePermanently(email, 7L);
+
+        assertFalse(Files.exists(tempDir.resolve("stored")));
+        verify(fileRepository).delete(file);
+        verify(fileRepository).flush();
     }
 
     private FileStorageService service(StoredFileRepository fileRepository, UserRepository userRepository) {

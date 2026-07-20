@@ -75,7 +75,8 @@ public class FolderService {
         findOwned(folderId, ownerEmail);
         List<Folder> folders = folderRepository
                 .findAllByOwnerEmailAndParentIdOrderByNameAsc(ownerEmail, folderId);
-        Page<StoredFile> files = fileRepository.findAllByOwnerEmailAndFolderId(ownerEmail, folderId, pageable);
+        Page<StoredFile> files = fileRepository
+                .findAllByOwnerEmailAndFolderIdAndDeletedAtIsNull(ownerEmail, folderId, pageable);
         return new FolderChildren(folders, files);
     }
 

@@ -61,6 +61,8 @@ public class StoredFile {
     @Builder.Default
     private Instant createdAt = Instant.now();
 
+    private Instant deletedAt;
+
     @ManyToMany
     @JoinTable(name = "file_tags",
             joinColumns = @JoinColumn(name = "file_id"),
@@ -83,5 +85,19 @@ public class StoredFile {
 
     void detachTag(Tag tag) {
         tags.remove(tag);
+    }
+
+    void softDelete() {
+        if (deletedAt == null) {
+            deletedAt = Instant.now();
+        }
+    }
+
+    void restore() {
+        deletedAt = null;
+    }
+
+    boolean isDeleted() {
+        return deletedAt != null;
     }
 }

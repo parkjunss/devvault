@@ -49,7 +49,7 @@ class FolderServiceTest {
         var pageable = PageRequest.of(0, 20);
         when(folderRepository.findByIdAndOwnerEmail(10L, email)).thenReturn(Optional.of(parent));
         when(folderRepository.findAllByOwnerEmailAndParentIdOrderByNameAsc(email, 10L)).thenReturn(List.of(child));
-        when(fileRepository.findAllByOwnerEmailAndFolderId(email, 10L, pageable))
+        when(fileRepository.findAllByOwnerEmailAndFolderIdAndDeletedAtIsNull(email, 10L, pageable))
                 .thenReturn(new PageImpl<>(List.of(file), pageable, 1));
         FolderService service = new FolderService(folderRepository, fileRepository, userRepository);
 

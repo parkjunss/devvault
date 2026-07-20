@@ -52,6 +52,7 @@ public class TagService {
 
     private StoredFile ownedFile(String ownerEmail, Long fileId) {
         return fileRepository.findByIdAndOwnerEmail(fileId, ownerEmail)
+                .filter(file -> !file.isDeleted())
                 .orElseThrow(TagService::notFound);
     }
 

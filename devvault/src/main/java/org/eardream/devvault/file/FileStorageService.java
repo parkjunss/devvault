@@ -6,8 +6,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
@@ -23,10 +26,18 @@ import java.security.DigestInputStream;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 public class FileStorageService {
+    private static final System.Logger LOGGER = System.getLogger(FileStorageService.class.getName());
+    private static final Set<String> PREVIEW_IMAGE_TYPES = Set.of(
+            "image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp");
+    private static final Set<String> CODE_EXTENSIONS = Set.of(
+            "txt", "md", "java", "kt", "kts", "js", "jsx", "ts", "tsx", "css", "scss",
+            "html", "htm", "xml", "json", "yaml", "yml", "properties", "sql", "py", "go",
+            "rs", "c", "h", "cpp", "hpp", "cs", "sh", "bat", "ps1", "gradle");
     private final StoredFileRepository storedFileRepository;
     private final UserRepository userRepository;
     private final FolderRepository folderRepository;
@@ -92,7 +103,7 @@ public class FileStorageService {
 
     @Transactional(readOnly = true)
     public Page<StoredFile> list(String ownerEmail, Pageable pageable) {
-        return storedFileRepository.findAllByOwnerEmail(ownerEmail, pageable);
+        return storedFileRepository.findAllByOwnerEmailAndDeletedAtIsNull(ownerEmail, pageable);
     }
 
     @Transactional(readOnly = true)
@@ -110,12 +121,13 @@ public class FileStorageService {
     @Transactional(readOnly = true)
     public StoredFile get(String ownerEmail, Long fileId) {
         return storedFileRepository.findByIdAndOwnerEmail(fileId, ownerEmail)
+                .filter(file -> !file.isDeleted())
                 .orElseThrow(FileStorageService::notFound);
     }
 
     @Transactional(readOnly = true)
     public StoredFile getDetail(String ownerEmail, Long fileId) {
-        return storedFileRepository.findOneByIdAndOwnerEmail(fileId, ownerEmail)
+        return storedFileRepository.findOneByIdAndOwnerEmailAndDeletedAtIsNull(fileId, ownerEmail)
                 .orElseThrow(FileStorageService::notFound);
     }
 
@@ -142,6 +154,80 @@ public class FileStorageService {
             throw notFound();
         }
         return new StoredDownload(storedFile, path);
+    }
+
+    @Transactional(readOnly = true)
+    public StoredPreview preview(String ownerEmail, Long fileId) {
+        StoredDownload download = download(ownerEmail, fileId);
+        return new StoredPreview(download.metadata(), download.path(), previewMediaType(download.metadata()));
+    }
+
+    @Transactional
+    public void softDelete(String ownerEmail, Long fileId) {
+        get(ownerEmail, fileId).softDelete();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<StoredFile> trash(String ownerEmail, Pageable pageable) {
+        return storedFileRepository.findAllByOwnerEmailAndDeletedAtIsNotNull(ownerEmail, pageable);
+    }
+
+    @Transactional
+    public void restore(String ownerEmail, Long fileId) {
+        getTrashed(ownerEmail, fileId).restore();
+    }
+
+    @Transactional
+    public void deletePermanently(String ownerEmail, Long fileId) {
+        StoredFile file = getTrashed(ownerEmail, fileId);
+        Path path = resolveStoredPath(file.getStoredName());
+        storedFileRepository.delete(file);
+        storedFileRepository.flush();
+        // ponytail: after-commit deletion can leave an orphan on I/O failure; add a cleanup job if observed.
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    deletePhysicalFile(path);
+                }
+            });
+        } else {
+            deletePhysicalFile(path);
+        }
+    }
+
+    private StoredFile getTrashed(String ownerEmail, Long fileId) {
+        return storedFileRepository.findByIdAndOwnerEmail(fileId, ownerEmail)
+                .filter(StoredFile::isDeleted)
+                .orElseThrow(FileStorageService::notFound);
+    }
+
+    private static MediaType previewMediaType(StoredFile file) {
+        String contentType = file.getContentType() == null
+                ? "" : file.getContentType().toLowerCase(Locale.ROOT);
+        if (PREVIEW_IMAGE_TYPES.contains(contentType)) {
+            return MediaType.parseMediaType(contentType);
+        }
+        if (MediaType.APPLICATION_PDF_VALUE.equals(contentType)) {
+            return MediaType.APPLICATION_PDF;
+        }
+        if (contentType.startsWith("text/") || CODE_EXTENSIONS.contains(extensionOf(file.getOriginalName()))) {
+            return MediaType.TEXT_PLAIN;
+        }
+        throw new ResponseStatusException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "미리보기를 지원하지 않는 파일입니다.");
+    }
+
+    private static String extensionOf(String fileName) {
+        int dot = fileName == null ? -1 : fileName.lastIndexOf('.');
+        return dot < 0 ? "" : fileName.substring(dot + 1).toLowerCase(Locale.ROOT);
+    }
+
+    private static void deletePhysicalFile(Path path) {
+        try {
+            Files.deleteIfExists(path);
+        } catch (IOException exception) {
+            LOGGER.log(System.Logger.Level.ERROR, "Failed to delete physical file " + path, exception);
+        }
     }
 
     private static String validateOriginalName(MultipartFile file) {
@@ -206,5 +292,8 @@ public class FileStorageService {
     }
 
     public record StoredDownload(StoredFile metadata, Path path) {
+    }
+
+    public record StoredPreview(StoredFile metadata, Path path, MediaType mediaType) {
     }
 }

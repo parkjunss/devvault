@@ -10,14 +10,17 @@ import org.springframework.data.repository.query.Param;
 import java.util.Optional;
 
 public interface StoredFileRepository extends JpaRepository<StoredFile, Long> {
-    Page<StoredFile> findAllByOwnerEmail(String email, Pageable pageable);
+    Page<StoredFile> findAllByOwnerEmailAndDeletedAtIsNull(String email, Pageable pageable);
 
-    Page<StoredFile> findAllByOwnerEmailAndFolderId(String email, Long folderId, Pageable pageable);
+    Page<StoredFile> findAllByOwnerEmailAndFolderIdAndDeletedAtIsNull(String email, Long folderId, Pageable pageable);
+
+    Page<StoredFile> findAllByOwnerEmailAndDeletedAtIsNotNull(String email, Pageable pageable);
 
     @Query(value = """
             select distinct file from StoredFile file
             left join file.tags tag
             where file.owner.email = :ownerEmail
+              and file.deletedAt is null
               and (:fileName is null or locate(:fileName, lower(file.originalName)) > 0)
               and (:extension is null or lower(file.originalName) like concat('%.', :extension))
               and (:tagName is null or lower(tag.name) = :tagName)
@@ -25,6 +28,7 @@ public interface StoredFileRepository extends JpaRepository<StoredFile, Long> {
             select count(distinct file.id) from StoredFile file
             left join file.tags tag
             where file.owner.email = :ownerEmail
+              and file.deletedAt is null
               and (:fileName is null or locate(:fileName, lower(file.originalName)) > 0)
               and (:extension is null or lower(file.originalName) like concat('%.', :extension))
               and (:tagName is null or lower(tag.name) = :tagName)
@@ -38,5 +42,5 @@ public interface StoredFileRepository extends JpaRepository<StoredFile, Long> {
     Optional<StoredFile> findByIdAndOwnerEmail(Long id, String email);
 
     @EntityGraph(attributePaths = "tags")
-    Optional<StoredFile> findOneByIdAndOwnerEmail(Long id, String email);
+    Optional<StoredFile> findOneByIdAndOwnerEmailAndDeletedAtIsNull(Long id, String email);
 }
