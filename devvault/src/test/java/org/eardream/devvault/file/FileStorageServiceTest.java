@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class FileStorageServiceTest {
@@ -88,6 +89,29 @@ class FileStorageServiceTest {
         var result = service.list("owner@example.com", pageable);
 
         assertEquals(List.of(ownedFile), result.getContent());
+    }
+
+    @Test
+    void combinesNormalizedFileNameExtensionAndTagFilters() {
+        StoredFileRepository fileRepository = mock(StoredFileRepository.class);
+        var pageable = PageRequest.of(0, 20);
+        when(fileRepository.search("owner@example.com", "report", "pdf", "java", pageable))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+        FileStorageService service = service(fileRepository, mock(UserRepository.class));
+
+        service.search("owner@example.com", " Report ", ".PDF", " Java ", pageable);
+
+        verify(fileRepository).search("owner@example.com", "report", "pdf", "java", pageable);
+    }
+
+    @Test
+    void rejectsInvalidExtensionFilter() {
+        FileStorageService service = service(mock(StoredFileRepository.class), mock(UserRepository.class));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> service.search("owner@example.com", null, "../pdf", null, PageRequest.of(0, 20)));
+
+        assertEquals(400, exception.getStatusCode().value());
     }
 
     @Test

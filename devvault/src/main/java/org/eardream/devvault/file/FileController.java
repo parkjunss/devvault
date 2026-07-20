@@ -47,9 +47,13 @@ public class FileController {
 
     @GetMapping
     Page<FileResponse> list(@AuthenticationPrincipal Jwt jwt,
+                            @RequestParam(required = false) String name,
+                            @RequestParam(required = false) String extension,
+                            @RequestParam(required = false) String tag,
                             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC)
                             Pageable pageable) {
-        return fileStorageService.list(jwt.getSubject(), pageable).map(FileResponse::from);
+        return fileStorageService.search(jwt.getSubject(), name, extension, tag, pageable)
+                .map(FileResponse::from);
     }
 
     @GetMapping("/{id}")

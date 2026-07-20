@@ -22,6 +22,7 @@ import java.security.MessageDigest;
 import java.security.DigestInputStream;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.Locale;
 import java.util.UUID;
 
 @Service
@@ -95,6 +96,18 @@ public class FileStorageService {
     }
 
     @Transactional(readOnly = true)
+    public Page<StoredFile> search(String ownerEmail, String requestedName, String requestedExtension,
+                                   String requestedTag, Pageable pageable) {
+        String name = normalizeFilter(requestedName, 255, "파일명");
+        String extension = normalizeExtension(requestedExtension);
+        String tag = normalizeFilter(requestedTag, 50, "태그");
+        if (name == null && extension == null && tag == null) {
+            return list(ownerEmail, pageable);
+        }
+        return storedFileRepository.search(ownerEmail, name, extension, tag, pageable);
+    }
+
+    @Transactional(readOnly = true)
     public StoredFile get(String ownerEmail, Long fileId) {
         return storedFileRepository.findByIdAndOwnerEmail(fileId, ownerEmail)
                 .orElseThrow(FileStorageService::notFound);
@@ -139,6 +152,31 @@ public class FileStorageService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "올바르지 않은 파일 이름입니다.");
         }
         return cleanName;
+    }
+
+    private static String normalizeFilter(String value, int maxLength, String label) {
+        if (value == null || !StringUtils.hasText(value.trim())) {
+            return null;
+        }
+        String normalized = value.trim().toLowerCase(Locale.ROOT);
+        if (normalized.length() > maxLength) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, label + " 검색어가 너무 깁니다.");
+        }
+        return normalized;
+    }
+
+    private static String normalizeExtension(String value) {
+        String extension = normalizeFilter(value, 20, "확장자");
+        if (extension == null) {
+            return null;
+        }
+        if (extension.startsWith(".")) {
+            extension = extension.substring(1);
+        }
+        if (!extension.matches("[\\p{L}\\p{N}]+(?:[._-][\\p{L}\\p{N}]+)*")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "올바르지 않은 확장자입니다.");
+        }
+        return extension;
     }
 
     private Path resolveStoredPath(String storedName) {
