@@ -24,6 +24,7 @@ public interface StoredFileRepository extends JpaRepository<StoredFile, Long> {
               and (:fileName is null or locate(:fileName, lower(file.originalName)) > 0)
               and (:extension is null or lower(file.originalName) like concat('%.', :extension))
               and (:tagName is null or lower(tag.name) = :tagName)
+              and (:favorite is null or file.favorite = :favorite)
             """, countQuery = """
             select count(distinct file.id) from StoredFile file
             left join file.tags tag
@@ -32,15 +33,33 @@ public interface StoredFileRepository extends JpaRepository<StoredFile, Long> {
               and (:fileName is null or locate(:fileName, lower(file.originalName)) > 0)
               and (:extension is null or lower(file.originalName) like concat('%.', :extension))
               and (:tagName is null or lower(tag.name) = :tagName)
+              and (:favorite is null or file.favorite = :favorite)
             """)
     Page<StoredFile> search(@Param("ownerEmail") String ownerEmail,
                             @Param("fileName") String fileName,
                             @Param("extension") String extension,
                             @Param("tagName") String tagName,
+                            @Param("favorite") Boolean favorite,
                             Pageable pageable);
+
+    Optional<StoredFile> findFirstByOwnerEmailAndChecksum(String ownerEmail, String checksum);
+
+    @Query("""
+            select count(file) as fileCount, coalesce(sum(file.size), 0) as usedBytes
+            from StoredFile file
+            where file.owner.email = :ownerEmail
+              and file.deletedAt is null
+            """)
+    UsageSummary summarizeActiveUsage(@Param("ownerEmail") String ownerEmail);
 
     Optional<StoredFile> findByIdAndOwnerEmail(Long id, String email);
 
     @EntityGraph(attributePaths = "tags")
     Optional<StoredFile> findOneByIdAndOwnerEmailAndDeletedAtIsNull(Long id, String email);
+
+    interface UsageSummary {
+        long getFileCount();
+
+        long getUsedBytes();
+    }
 }

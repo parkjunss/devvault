@@ -4,6 +4,7 @@ import org.eardream.devvault.user.entity.User;
 import org.eardream.devvault.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
@@ -99,13 +100,13 @@ class FileStorageServiceTest {
     void combinesNormalizedFileNameExtensionAndTagFilters() {
         StoredFileRepository fileRepository = mock(StoredFileRepository.class);
         var pageable = PageRequest.of(0, 20);
-        when(fileRepository.search("owner@example.com", "report", "pdf", "java", pageable))
+        when(fileRepository.search("owner@example.com", "report", "pdf", "java", true, pageable))
                 .thenReturn(new PageImpl<>(List.of(), pageable, 0));
         FileStorageService service = service(fileRepository, mock(UserRepository.class));
 
-        service.search("owner@example.com", " Report ", ".PDF", " Java ", pageable);
+        service.search("owner@example.com", " Report ", ".PDF", " Java ", true, pageable);
 
-        verify(fileRepository).search("owner@example.com", "report", "pdf", "java", pageable);
+        verify(fileRepository).search("owner@example.com", "report", "pdf", "java", true, pageable);
     }
 
     @Test
@@ -113,7 +114,7 @@ class FileStorageServiceTest {
         FileStorageService service = service(mock(StoredFileRepository.class), mock(UserRepository.class));
 
         ResponseStatusException exception = assertThrows(ResponseStatusException.class,
-                () -> service.search("owner@example.com", null, "../pdf", null, PageRequest.of(0, 20)));
+                () -> service.search("owner@example.com", null, "../pdf", null, null, PageRequest.of(0, 20)));
 
         assertEquals(400, exception.getStatusCode().value());
     }
@@ -288,6 +289,77 @@ class FileStorageServiceTest {
         assertFalse(Files.exists(tempDir.resolve("stored")));
         verify(fileRepository).delete(file);
         verify(fileRepository).flush();
+    }
+
+    @Test
+    void favoritesAndUnfavoritesAnOwnedFile() {
+        StoredFileRepository fileRepository = mock(StoredFileRepository.class);
+        String email = "owner@example.com";
+        StoredFile file = StoredFile.builder().id(7L).originalName("notes.txt").build();
+        when(fileRepository.findByIdAndOwnerEmail(7L, email)).thenReturn(Optional.of(file));
+        FileStorageService service = service(fileRepository, mock(UserRepository.class));
+
+        service.setFavorite(email, 7L, true);
+        assertTrue(file.isFavorite());
+
+        service.setFavorite(email, 7L, false);
+        assertFalse(file.isFavorite());
+    }
+
+    @Test
+    void rejectsDuplicateChecksumBeforeMovingFileIntoPlace() throws Exception {
+        StoredFileRepository fileRepository = mock(StoredFileRepository.class);
+        UserRepository userRepository = mock(UserRepository.class);
+        User user = User.builder().id(1L).email("owner@example.com").password("pw").username("owner").build();
+        String checksum = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824";
+        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+        when(fileRepository.findFirstByOwnerEmailAndChecksum(user.getEmail(), checksum))
+                .thenReturn(Optional.of(StoredFile.builder().id(9L).checksum(checksum).build()));
+        FileStorageService service = service(fileRepository, userRepository);
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> service.upload(user.getEmail(),
+                        new MockMultipartFile("file", "hello.txt", "text/plain", "hello".getBytes())));
+
+        assertEquals(409, exception.getStatusCode().value());
+        try (var files = Files.list(tempDir)) {
+            assertEquals(0, files.count());
+        }
+    }
+
+    @Test
+    void convertsConcurrentDuplicateInsertToConflictAndRemovesPhysicalFile() throws Exception {
+        StoredFileRepository fileRepository = mock(StoredFileRepository.class);
+        UserRepository userRepository = mock(UserRepository.class);
+        User user = User.builder().id(1L).email("owner@example.com").password("pw").username("owner").build();
+        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+        when(fileRepository.saveAndFlush(any(StoredFile.class)))
+                .thenThrow(new DataIntegrityViolationException("duplicate checksum"));
+        FileStorageService service = service(fileRepository, userRepository);
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> service.upload(user.getEmail(),
+                        new MockMultipartFile("file", "hello.txt", "text/plain", "hello".getBytes())));
+
+        assertEquals(409, exception.getStatusCode().value());
+        try (var files = Files.list(tempDir)) {
+            assertEquals(0, files.count());
+        }
+    }
+
+    @Test
+    void returnsActiveFileCountAndUsedBytesForDashboard() {
+        StoredFileRepository fileRepository = mock(StoredFileRepository.class);
+        StoredFileRepository.UsageSummary usage = mock(StoredFileRepository.UsageSummary.class);
+        when(usage.getFileCount()).thenReturn(3L);
+        when(usage.getUsedBytes()).thenReturn(8192L);
+        when(fileRepository.summarizeActiveUsage("owner@example.com")).thenReturn(usage);
+        FileStorageService service = service(fileRepository, mock(UserRepository.class));
+
+        FileStorageService.DashboardSummary result = service.dashboard("owner@example.com");
+
+        assertEquals(3L, result.fileCount());
+        assertEquals(8192L, result.usedBytes());
     }
 
     private FileStorageService service(StoredFileRepository fileRepository, UserRepository userRepository) {

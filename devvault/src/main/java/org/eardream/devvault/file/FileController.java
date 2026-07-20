@@ -54,9 +54,10 @@ public class FileController {
                             @RequestParam(required = false) String name,
                             @RequestParam(required = false) String extension,
                             @RequestParam(required = false) String tag,
+                            @RequestParam(required = false) Boolean favorite,
                             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC)
                             Pageable pageable) {
-        return fileStorageService.search(jwt.getSubject(), name, extension, tag, pageable)
+        return fileStorageService.search(jwt.getSubject(), name, extension, tag, favorite, pageable)
                 .map(FileResponse::from);
     }
 
@@ -135,6 +136,18 @@ public class FileController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/{id}/favorite")
+    ResponseEntity<Void> favorite(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
+        fileStorageService.setFavorite(jwt.getSubject(), id, true);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/{id}/favorite")
+    ResponseEntity<Void> unfavorite(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
+        fileStorageService.setFavorite(jwt.getSubject(), id, false);
+        return ResponseEntity.noContent().build();
+    }
+
     private static MediaType parseMediaType(String contentType) {
         try {
             return contentType == null ? MediaType.APPLICATION_OCTET_STREAM : MediaType.parseMediaType(contentType);
@@ -157,16 +170,16 @@ public class FileController {
     }
 
     public record FileResponse(Long id, String originalName, Long folderId, String contentType, long size,
-                               String checksum, Instant createdAt) {
+                               String checksum, boolean favorite, Instant createdAt) {
         static FileResponse from(StoredFile file) {
             return new FileResponse(file.getId(), file.getOriginalName(),
                     file.getFolder() == null ? null : file.getFolder().getId(), file.getContentType(),
-                    file.getSize(), file.getChecksum(), file.getCreatedAt());
+                    file.getSize(), file.getChecksum(), file.isFavorite(), file.getCreatedAt());
         }
     }
 
     public record FileDetailResponse(Long id, String originalName, Long folderId, String contentType, long size,
-                                     String checksum, Instant createdAt,
+                                     String checksum, boolean favorite, Instant createdAt,
                                      List<TagController.TagResponse> tags) {
         static FileDetailResponse from(StoredFile file) {
             List<TagController.TagResponse> tags = file.getTags().stream()
@@ -175,7 +188,7 @@ public class FileController {
                     .toList();
             return new FileDetailResponse(file.getId(), file.getOriginalName(),
                     file.getFolder() == null ? null : file.getFolder().getId(), file.getContentType(),
-                    file.getSize(), file.getChecksum(), file.getCreatedAt(), tags);
+                    file.getSize(), file.getChecksum(), file.isFavorite(), file.getCreatedAt(), tags);
         }
     }
 

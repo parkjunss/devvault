@@ -24,7 +24,9 @@ import java.util.HashSet;
 import java.util.Set;
 
 @Entity
-@Table(name = "stored_files")
+@Table(name = "stored_files",
+        uniqueConstraints = @UniqueConstraint(name = "uk_stored_files_owner_checksum",
+                columnNames = {"owner_id", "checksum"}))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
@@ -56,6 +58,10 @@ public class StoredFile {
 
     @Column(nullable = false, length = 64)
     private String checksum;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean favorite = false;
 
     @Column(nullable = false, updatable = false)
     @Builder.Default
@@ -95,6 +101,10 @@ public class StoredFile {
 
     void restore() {
         deletedAt = null;
+    }
+
+    void setFavorite(boolean favorite) {
+        this.favorite = favorite;
     }
 
     boolean isDeleted() {

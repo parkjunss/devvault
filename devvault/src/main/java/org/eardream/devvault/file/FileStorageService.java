@@ -3,6 +3,7 @@ package org.eardream.devvault.file;
 import org.eardream.devvault.user.entity.User;
 import org.eardream.devvault.user.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -69,6 +70,10 @@ public class FileStorageService {
             try (InputStream input = new DigestInputStream(multipartFile.getInputStream(), digest)) {
                 Files.copy(input, tempPath, StandardCopyOption.REPLACE_EXISTING);
             }
+            String checksum = HexFormat.of().formatHex(digest.digest());
+            if (storedFileRepository.findFirstByOwnerEmailAndChecksum(ownerEmail, checksum).isPresent()) {
+                throw duplicateFile();
+            }
             moveIntoPlace(tempPath, finalPath);
             tempPath = null;
 
@@ -78,12 +83,15 @@ public class FileStorageService {
                     .storedName(storedName)
                     .contentType(multipartFile.getContentType())
                     .size(Files.size(finalPath))
-                    .checksum(HexFormat.of().formatHex(digest.digest()))
+                    .checksum(checksum)
                     .build();
             try {
                 return storedFileRepository.saveAndFlush(storedFile);
+            } catch (DataIntegrityViolationException exception) {
+                deletePhysicalFile(finalPath);
+                throw duplicateFile(exception);
             } catch (RuntimeException exception) {
-                Files.deleteIfExists(finalPath);
+                deletePhysicalFile(finalPath);
                 throw exception;
             }
         } catch (IOException exception) {
@@ -108,14 +116,27 @@ public class FileStorageService {
 
     @Transactional(readOnly = true)
     public Page<StoredFile> search(String ownerEmail, String requestedName, String requestedExtension,
-                                   String requestedTag, Pageable pageable) {
+                                   String requestedTag, Boolean favorite, Pageable pageable) {
         String name = normalizeFilter(requestedName, 255, "파일명");
         String extension = normalizeExtension(requestedExtension);
         String tag = normalizeFilter(requestedTag, 50, "태그");
-        if (name == null && extension == null && tag == null) {
+        if (name == null && extension == null && tag == null && favorite == null) {
             return list(ownerEmail, pageable);
         }
-        return storedFileRepository.search(ownerEmail, name, extension, tag, pageable);
+        return storedFileRepository.search(ownerEmail, name, extension, tag, favorite, pageable);
+    }
+
+    @Transactional
+    public StoredFile setFavorite(String ownerEmail, Long fileId, boolean favorite) {
+        StoredFile file = get(ownerEmail, fileId);
+        file.setFavorite(favorite);
+        return file;
+    }
+
+    @Transactional(readOnly = true)
+    public DashboardSummary dashboard(String ownerEmail) {
+        StoredFileRepository.UsageSummary usage = storedFileRepository.summarizeActiveUsage(ownerEmail);
+        return new DashboardSummary(usage.getFileCount(), usage.getUsedBytes());
     }
 
     @Transactional(readOnly = true)
@@ -291,9 +312,20 @@ public class FileStorageService {
         return new ResponseStatusException(HttpStatus.NOT_FOUND, "파일을 찾을 수 없습니다.");
     }
 
+    private static ResponseStatusException duplicateFile() {
+        return new ResponseStatusException(HttpStatus.CONFLICT, "같은 내용의 파일이 이미 존재합니다.");
+    }
+
+    private static ResponseStatusException duplicateFile(Throwable cause) {
+        return new ResponseStatusException(HttpStatus.CONFLICT, "같은 내용의 파일이 이미 존재합니다.", cause);
+    }
+
     public record StoredDownload(StoredFile metadata, Path path) {
     }
 
     public record StoredPreview(StoredFile metadata, Path path, MediaType mediaType) {
+    }
+
+    public record DashboardSummary(long fileCount, long usedBytes) {
     }
 }
