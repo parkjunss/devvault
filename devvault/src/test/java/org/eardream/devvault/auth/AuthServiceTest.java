@@ -32,6 +32,7 @@ class AuthServiceTest {
     @Mock PasswordEncoder passwordEncoder;
     @Mock AuthenticationManager authenticationManager;
     @Mock JwtService jwtService;
+    @Mock RefreshTokenService refreshTokenService;
     @InjectMocks AuthService authService;
 
     @Test
@@ -40,7 +41,9 @@ class AuthServiceTest {
         when(passwordEncoder.encode("password123")).thenReturn("encoded");
         when(roleRepository.findByRole("ROLE_USER")).thenReturn(Optional.of(new Role("ROLE_USER")));
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(jwtService.createToken(any(User.class))).thenReturn(new AuthToken("token", "Bearer", 900));
+        when(refreshTokenService.issue(any(User.class))).thenReturn("refresh-token");
+        when(jwtService.createToken(any(User.class), org.mockito.ArgumentMatchers.eq("refresh-token")))
+                .thenReturn(new AuthToken("token", "refresh-token", "Bearer", 900));
 
         AuthToken token = authService.signup("user@example.com", "password123", "user");
 
@@ -61,11 +64,33 @@ class AuthServiceTest {
         User user = User.builder().email("user@example.com").password("encoded").username("user").build();
         when(authenticationManager.authenticate(any()))
                 .thenReturn(UsernamePasswordAuthenticationToken.authenticated(user, null, user.getAuthorities()));
-        when(jwtService.createToken(user)).thenReturn(new AuthToken("token", "Bearer", 900));
+        when(refreshTokenService.issue(user)).thenReturn("refresh-token");
+        when(jwtService.createToken(user, "refresh-token"))
+                .thenReturn(new AuthToken("token", "refresh-token", "Bearer", 900));
 
         AuthToken token = authService.login("USER@example.com", "password123");
 
         assertEquals("token", token.accessToken());
         verify(authenticationManager).authenticate(any());
+    }
+
+    @Test
+    void refreshRotatesTokenAndReturnsNewPair() {
+        User user = User.builder().email("user@example.com").password("encoded").username("user").build();
+        when(refreshTokenService.rotate("old-token"))
+                .thenReturn(new RefreshTokenService.RotatedToken(user, "new-token"));
+        when(jwtService.createToken(user, "new-token"))
+                .thenReturn(new AuthToken("access-token", "new-token", "Bearer", 900));
+
+        AuthToken token = authService.refresh("old-token");
+
+        assertEquals("new-token", token.refreshToken());
+    }
+
+    @Test
+    void logoutRevokesRefreshToken() {
+        authService.logout("refresh-token");
+
+        verify(refreshTokenService).revoke("refresh-token");
     }
 }

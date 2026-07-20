@@ -30,6 +30,17 @@ public class AuthController {
         return authService.login(request.email(), request.password());
     }
 
+    @PostMapping("/refresh")
+    public AuthToken refresh(@Valid @RequestBody RefreshRequest request) {
+        return authService.refresh(request.refreshToken());
+    }
+
+    @PostMapping("/logout")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void logout(@Valid @RequestBody RefreshRequest request) {
+        authService.logout(request.refreshToken());
+    }
+
     public record SignupRequest(
             @NotBlank @Email @Size(max = 50) String email,
             @NotBlank @Size(min = 8, max = 72) String password,
@@ -39,5 +50,8 @@ public class AuthController {
     public record LoginRequest(
             @NotBlank @Email @Size(max = 50) String email,
             @NotBlank @Size(max = 72) String password) {
+    }
+
+    public record RefreshRequest(@NotBlank @Size(max = 200) String refreshToken) {
     }
 }

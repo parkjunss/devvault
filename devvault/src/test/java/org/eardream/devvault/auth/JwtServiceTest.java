@@ -25,7 +25,7 @@ class JwtServiceTest {
         User user = User.builder().email("user@example.com").password("encoded").username("user").build();
         user.getUserRoles().add(UserRole.builder().user(user).role(new Role("ROLE_USER")).build());
 
-        AuthToken token = service.createToken(user);
+        AuthToken token = service.createToken(user, "refresh-token");
         Jwt jwt = NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build()
                 .decode(token.accessToken());
 

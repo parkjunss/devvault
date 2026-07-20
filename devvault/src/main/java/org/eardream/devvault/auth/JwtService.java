@@ -24,7 +24,7 @@ public class JwtService {
         this.expirationMs = expirationMs;
     }
 
-    public AuthToken createToken(User user) {
+    public AuthToken createToken(User user, String refreshToken) {
         Instant issuedAt = Instant.now();
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer("devvault")
@@ -35,6 +35,6 @@ public class JwtService {
                 .build();
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
         String token = jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
-        return new AuthToken(token, "Bearer", expirationMs / 1000);
+        return new AuthToken(token, refreshToken, "Bearer", expirationMs / 1000);
     }
 }

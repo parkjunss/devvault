@@ -27,6 +27,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
+    private final RefreshTokenService refreshTokenService;
 
     @Transactional
     public AuthToken signup(String email, String password, String username) {
@@ -44,7 +45,7 @@ public class AuthService {
                 .orElseThrow(() -> new IllegalStateException("ROLE_USER가 초기화되지 않았습니다."));
         UserRole userRole = userRoleRepository.save(UserRole.builder().user(user).role(role).build());
         user.getUserRoles().add(userRole);
-        return jwtService.createToken(user);
+        return createTokens(user);
     }
 
     public AuthToken login(String email, String password) {
@@ -52,6 +53,19 @@ public class AuthService {
                 UsernamePasswordAuthenticationToken.unauthenticated(
                         email.trim().toLowerCase(Locale.ROOT), password))
                 .getPrincipal();
-        return jwtService.createToken(user);
+        return createTokens(user);
+    }
+
+    public AuthToken refresh(String refreshToken) {
+        RefreshTokenService.RotatedToken rotated = refreshTokenService.rotate(refreshToken);
+        return jwtService.createToken(rotated.user(), rotated.refreshToken());
+    }
+
+    public void logout(String refreshToken) {
+        refreshTokenService.revoke(refreshToken);
+    }
+
+    private AuthToken createTokens(User user) {
+        return jwtService.createToken(user, refreshTokenService.issue(user));
     }
 }
