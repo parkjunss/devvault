@@ -9,5 +9,7 @@ import java.util.Optional;
 public interface StoredFileRepository extends JpaRepository<StoredFile, Long> {
     Page<StoredFile> findAllByOwnerEmail(String email, Pageable pageable);
 
+    Page<StoredFile> findAllByOwnerEmailAndFolderId(String email, Long folderId, Pageable pageable);
+
     Optional<StoredFile> findByIdAndOwnerEmail(Long id, String email);
 }
