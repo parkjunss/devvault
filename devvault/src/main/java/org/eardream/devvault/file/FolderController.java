@@ -13,10 +13,13 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.databind.JsonNode;
 
 import java.time.Instant;
 import java.util.List;
@@ -37,6 +40,18 @@ public class FolderController {
         return ResponseEntity.status(HttpStatus.CREATED).body(FolderResponse.from(folder));
     }
 
+    @PatchMapping("/{id}")
+    FolderResponse update(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
+                          @RequestBody UpdateFolderRequest request) {
+        boolean parentChanged = request.parentId() != null;
+        Long parentId = parseParentId(request.parentId());
+        if (request.name() == null && !parentChanged) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "변경할 값을 입력해야 합니다.");
+        }
+        return FolderResponse.from(folderService.update(
+                jwt.getSubject(), id, request.name(), parentChanged, parentId));
+    }
+
     @GetMapping("/{id}/children")
     FolderChildrenResponse children(@AuthenticationPrincipal Jwt jwt,
                                     @PathVariable Long id,
@@ -49,6 +64,19 @@ public class FolderController {
     }
 
     public record CreateFolderRequest(@NotBlank @Size(max = 100) String name, Long parentId) {
+    }
+
+    public record UpdateFolderRequest(String name, JsonNode parentId) {
+    }
+
+    private static Long parseParentId(JsonNode parentId) {
+        if (parentId == null || parentId.isNull()) {
+            return null;
+        }
+        if (!parentId.isIntegralNumber() || !parentId.canConvertToLong() || parentId.longValue() <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "parentId는 양의 정수 또는 null이어야 합니다.");
+        }
+        return parentId.longValue();
     }
 
     public record FolderResponse(Long id, String name, Long parentId, Instant createdAt) {

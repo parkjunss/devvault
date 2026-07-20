@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -72,5 +73,55 @@ class FolderServiceTest {
                 () -> service.create("owner@example.com", "child", 10L));
 
         assertEquals(404, exception.getStatusCode().value());
+    }
+
+    @Test
+    void renamesAndMovesAnOwnedFolder() {
+        FolderRepository folderRepository = mock(FolderRepository.class);
+        String email = "owner@example.com";
+        Folder folder = Folder.builder().id(10L).name("old").build();
+        Folder parent = Folder.builder().id(20L).name("parent").build();
+        when(folderRepository.findByIdAndOwnerEmail(10L, email)).thenReturn(Optional.of(folder));
+        when(folderRepository.findByIdAndOwnerEmail(20L, email)).thenReturn(Optional.of(parent));
+        FolderService service = new FolderService(
+                folderRepository, mock(StoredFileRepository.class), mock(UserRepository.class));
+
+        Folder updated = service.update(email, 10L, " new ", true, 20L);
+
+        assertEquals("new", updated.getName());
+        assertEquals(parent, updated.getParent());
+    }
+
+    @Test
+    void rejectsMovingFolderUnderItsOwnDescendant() {
+        FolderRepository folderRepository = mock(FolderRepository.class);
+        String email = "owner@example.com";
+        Folder folder = Folder.builder().id(10L).name("root").build();
+        Folder child = Folder.builder().id(20L).name("child").parent(folder).build();
+        Folder descendant = Folder.builder().id(30L).name("descendant").parent(child).build();
+        when(folderRepository.findByIdAndOwnerEmail(10L, email)).thenReturn(Optional.of(folder));
+        when(folderRepository.findByIdAndOwnerEmail(30L, email)).thenReturn(Optional.of(descendant));
+        FolderService service = new FolderService(
+                folderRepository, mock(StoredFileRepository.class), mock(UserRepository.class));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> service.update(email, 10L, null, true, 30L));
+
+        assertEquals(400, exception.getStatusCode().value());
+    }
+
+    @Test
+    void movesFolderBackToRoot() {
+        FolderRepository folderRepository = mock(FolderRepository.class);
+        String email = "owner@example.com";
+        Folder folder = Folder.builder().id(10L).name("child")
+                .parent(Folder.builder().id(20L).name("parent").build()).build();
+        when(folderRepository.findByIdAndOwnerEmail(10L, email)).thenReturn(Optional.of(folder));
+        FolderService service = new FolderService(
+                folderRepository, mock(StoredFileRepository.class), mock(UserRepository.class));
+
+        Folder updated = service.update(email, 10L, null, true, null);
+
+        assertNull(updated.getParent());
     }
 }

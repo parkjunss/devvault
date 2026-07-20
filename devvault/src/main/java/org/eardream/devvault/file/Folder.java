@@ -45,4 +45,12 @@ public class Folder {
     @Column(nullable = false, updatable = false)
     @Builder.Default
     private Instant createdAt = Instant.now();
+
+    void rename(String name) {
+        this.name = name;
+    }
+
+    void moveTo(Folder parent) {
+        this.parent = parent;
+    }
 }
