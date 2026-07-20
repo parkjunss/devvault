@@ -28,13 +28,16 @@ import java.util.UUID;
 public class FileStorageService {
     private final StoredFileRepository storedFileRepository;
     private final UserRepository userRepository;
+    private final FolderRepository folderRepository;
     private final Path storageRoot;
 
     public FileStorageService(StoredFileRepository storedFileRepository,
                               UserRepository userRepository,
+                              FolderRepository folderRepository,
                               @Value("${app.storage.location}") String storageLocation) {
         this.storedFileRepository = storedFileRepository;
         this.userRepository = userRepository;
+        this.folderRepository = folderRepository;
         this.storageRoot = Path.of(storageLocation).toAbsolutePath().normalize();
     }
 
@@ -97,6 +100,21 @@ public class FileStorageService {
                 .orElseThrow(FileStorageService::notFound);
     }
 
+    @Transactional
+    public StoredFile update(String ownerEmail, Long fileId, String requestedName,
+                             boolean folderChanged, Long folderId) {
+        StoredFile storedFile = get(ownerEmail, fileId);
+        if (requestedName != null) {
+            storedFile.rename(validateFileName(requestedName));
+        }
+        if (folderChanged) {
+            Folder folder = folderId == null ? null : folderRepository.findByIdAndOwnerEmail(folderId, ownerEmail)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "폴더를 찾을 수 없습니다."));
+            storedFile.moveTo(folder);
+        }
+        return storedFile;
+    }
+
     @Transactional(readOnly = true)
     public StoredDownload download(String ownerEmail, Long fileId) {
         StoredFile storedFile = get(ownerEmail, fileId);
@@ -111,7 +129,10 @@ public class FileStorageService {
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "빈 파일은 업로드할 수 없습니다.");
         }
-        String rawName = file.getOriginalFilename();
+        return validateFileName(file.getOriginalFilename());
+    }
+
+    private static String validateFileName(String rawName) {
         String cleanName = StringUtils.cleanPath(rawName == null ? "" : rawName.trim());
         if (!StringUtils.hasText(cleanName) || cleanName.length() > 255 || cleanName.contains("..")
                 || cleanName.contains("/") || cleanName.contains("\\")) {

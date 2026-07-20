@@ -1,5 +1,6 @@
 package org.eardream.devvault.file;
 
+import tools.jackson.databind.JsonNode;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -14,11 +15,14 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -53,6 +57,18 @@ public class FileController {
         return FileResponse.from(fileStorageService.get(jwt.getSubject(), id));
     }
 
+    @PatchMapping("/{id}")
+    FileResponse update(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
+                        @RequestBody UpdateFileRequest request) {
+        boolean folderChanged = request.folderId() != null;
+        Long folderId = parseFolderId(request.folderId());
+        if (request.name() == null && !folderChanged) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "변경할 값을 입력해야 합니다.");
+        }
+        return FileResponse.from(fileStorageService.update(
+                jwt.getSubject(), id, request.name(), folderChanged, folderId));
+    }
+
     @GetMapping("/{id}/download")
     ResponseEntity<InputStreamResource> download(@AuthenticationPrincipal Jwt jwt,
                                                  @PathVariable Long id) throws IOException {
@@ -77,10 +93,24 @@ public class FileController {
         }
     }
 
-    public record FileResponse(Long id, String originalName, String contentType, long size,
+    private static Long parseFolderId(JsonNode folderId) {
+        if (folderId == null || folderId.isNull()) {
+            return null;
+        }
+        if (!folderId.isIntegralNumber() || !folderId.canConvertToLong() || folderId.longValue() <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "folderId는 양의 정수 또는 null이어야 합니다.");
+        }
+        return folderId.longValue();
+    }
+
+    public record UpdateFileRequest(String name, JsonNode folderId) {
+    }
+
+    public record FileResponse(Long id, String originalName, Long folderId, String contentType, long size,
                                String checksum, Instant createdAt) {
         static FileResponse from(StoredFile file) {
-            return new FileResponse(file.getId(), file.getOriginalName(), file.getContentType(),
+            return new FileResponse(file.getId(), file.getOriginalName(),
+                    file.getFolder() == null ? null : file.getFolder().getId(), file.getContentType(),
                     file.getSize(), file.getChecksum(), file.getCreatedAt());
         }
     }

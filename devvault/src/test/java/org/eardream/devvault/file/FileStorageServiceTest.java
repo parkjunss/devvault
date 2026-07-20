@@ -16,6 +16,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -33,7 +34,7 @@ class FileStorageServiceTest {
         User user = User.builder().id(1L).email("owner@example.com").password("pw").username("owner").build();
         when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
         when(fileRepository.saveAndFlush(any(StoredFile.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        FileStorageService service = new FileStorageService(fileRepository, userRepository, tempDir.toString());
+        FileStorageService service = service(fileRepository, userRepository);
 
         StoredFile result = service.upload(user.getEmail(),
                 new MockMultipartFile("file", "hello.txt", "text/plain", "hello".getBytes()));
@@ -49,7 +50,7 @@ class FileStorageServiceTest {
         StoredFileRepository fileRepository = mock(StoredFileRepository.class);
         UserRepository userRepository = mock(UserRepository.class);
         when(fileRepository.findByIdAndOwnerEmail(7L, "other@example.com")).thenReturn(Optional.empty());
-        FileStorageService service = new FileStorageService(fileRepository, userRepository, tempDir.toString());
+        FileStorageService service = service(fileRepository, userRepository);
 
         ResponseStatusException exception = assertThrows(ResponseStatusException.class,
                 () -> service.download("other@example.com", 7L));
@@ -64,7 +65,7 @@ class FileStorageServiceTest {
         User user = User.builder().id(1L).email("owner@example.com").password("pw").username("owner").build();
         when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
         when(fileRepository.saveAndFlush(any(StoredFile.class))).thenThrow(new IllegalStateException("database unavailable"));
-        FileStorageService service = new FileStorageService(fileRepository, userRepository, tempDir.toString());
+        FileStorageService service = service(fileRepository, userRepository);
 
         assertThrows(IllegalStateException.class, () -> service.upload(user.getEmail(),
                 new MockMultipartFile("file", "hello.txt", "text/plain", "hello".getBytes())));
@@ -82,7 +83,7 @@ class FileStorageServiceTest {
         var ownedFile = StoredFile.builder().id(1L).originalName("mine.txt").storedName("stored").build();
         when(fileRepository.findAllByOwnerEmail("owner@example.com", pageable))
                 .thenReturn(new PageImpl<>(List.of(ownedFile), pageable, 1));
-        FileStorageService service = new FileStorageService(fileRepository, userRepository, tempDir.toString());
+        FileStorageService service = service(fileRepository, userRepository);
 
         var result = service.list("owner@example.com", pageable);
 
@@ -94,11 +95,64 @@ class FileStorageServiceTest {
         StoredFileRepository fileRepository = mock(StoredFileRepository.class);
         UserRepository userRepository = mock(UserRepository.class);
         when(fileRepository.findByIdAndOwnerEmail(7L, "other@example.com")).thenReturn(Optional.empty());
-        FileStorageService service = new FileStorageService(fileRepository, userRepository, tempDir.toString());
+        FileStorageService service = service(fileRepository, userRepository);
 
         ResponseStatusException exception = assertThrows(ResponseStatusException.class,
                 () -> service.get("other@example.com", 7L));
 
         assertEquals(404, exception.getStatusCode().value());
+    }
+
+    @Test
+    void renamesAndMovesAnOwnedFile() {
+        StoredFileRepository fileRepository = mock(StoredFileRepository.class);
+        FolderRepository folderRepository = mock(FolderRepository.class);
+        String email = "owner@example.com";
+        StoredFile file = StoredFile.builder().id(7L).originalName("old.txt").build();
+        Folder folder = Folder.builder().id(10L).name("docs").build();
+        when(fileRepository.findByIdAndOwnerEmail(7L, email)).thenReturn(Optional.of(file));
+        when(folderRepository.findByIdAndOwnerEmail(10L, email)).thenReturn(Optional.of(folder));
+        FileStorageService service = new FileStorageService(fileRepository, mock(UserRepository.class),
+                folderRepository, tempDir.toString());
+
+        StoredFile result = service.update(email, 7L, " new.txt ", true, 10L);
+
+        assertEquals("new.txt", result.getOriginalName());
+        assertEquals(folder, result.getFolder());
+    }
+
+    @Test
+    void rejectsMovingAFileToAnotherUsersFolder() {
+        StoredFileRepository fileRepository = mock(StoredFileRepository.class);
+        FolderRepository folderRepository = mock(FolderRepository.class);
+        String email = "owner@example.com";
+        StoredFile file = StoredFile.builder().id(7L).originalName("old.txt").build();
+        when(fileRepository.findByIdAndOwnerEmail(7L, email)).thenReturn(Optional.of(file));
+        when(folderRepository.findByIdAndOwnerEmail(10L, email)).thenReturn(Optional.empty());
+        FileStorageService service = new FileStorageService(fileRepository, mock(UserRepository.class),
+                folderRepository, tempDir.toString());
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> service.update(email, 7L, null, true, 10L));
+
+        assertEquals(404, exception.getStatusCode().value());
+    }
+
+    @Test
+    void movesAFileBackToRoot() {
+        StoredFileRepository fileRepository = mock(StoredFileRepository.class);
+        String email = "owner@example.com";
+        StoredFile file = StoredFile.builder().id(7L).originalName("old.txt")
+                .folder(Folder.builder().id(10L).name("docs").build()).build();
+        when(fileRepository.findByIdAndOwnerEmail(7L, email)).thenReturn(Optional.of(file));
+        FileStorageService service = service(fileRepository, mock(UserRepository.class));
+
+        StoredFile result = service.update(email, 7L, null, true, null);
+
+        assertNull(result.getFolder());
+    }
+
+    private FileStorageService service(StoredFileRepository fileRepository, UserRepository userRepository) {
+        return new FileStorageService(fileRepository, userRepository, mock(FolderRepository.class), tempDir.toString());
     }
 }

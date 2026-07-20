@@ -55,4 +55,12 @@ public class StoredFile {
     @Column(nullable = false, updatable = false)
     @Builder.Default
     private Instant createdAt = Instant.now();
+
+    void rename(String name) {
+        this.originalName = name;
+    }
+
+    void moveTo(Folder folder) {
+        this.folder = folder;
+    }
 }
