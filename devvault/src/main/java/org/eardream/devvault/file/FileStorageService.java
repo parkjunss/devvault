@@ -3,6 +3,8 @@ package org.eardream.devvault.file;
 import org.eardream.devvault.user.entity.User;
 import org.eardream.devvault.user.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -85,9 +87,19 @@ public class FileStorageService {
     }
 
     @Transactional(readOnly = true)
-    public StoredDownload download(String ownerEmail, Long fileId) {
-        StoredFile storedFile = storedFileRepository.findByIdAndOwnerEmail(fileId, ownerEmail)
+    public Page<StoredFile> list(String ownerEmail, Pageable pageable) {
+        return storedFileRepository.findAllByOwnerEmail(ownerEmail, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public StoredFile get(String ownerEmail, Long fileId) {
+        return storedFileRepository.findByIdAndOwnerEmail(fileId, ownerEmail)
                 .orElseThrow(FileStorageService::notFound);
+    }
+
+    @Transactional(readOnly = true)
+    public StoredDownload download(String ownerEmail, Long fileId) {
+        StoredFile storedFile = get(ownerEmail, fileId);
         Path path = resolveStoredPath(storedFile.getStoredName());
         if (!Files.isRegularFile(path)) {
             throw notFound();

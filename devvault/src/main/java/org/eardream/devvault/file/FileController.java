@@ -1,6 +1,10 @@
 package org.eardream.devvault.file;
 
 import org.springframework.core.io.InputStreamResource;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -35,6 +39,18 @@ public class FileController {
                                         @RequestParam("file") MultipartFile file) {
         StoredFile storedFile = fileStorageService.upload(jwt.getSubject(), file);
         return ResponseEntity.status(HttpStatus.CREATED).body(FileResponse.from(storedFile));
+    }
+
+    @GetMapping
+    Page<FileResponse> list(@AuthenticationPrincipal Jwt jwt,
+                            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC)
+                            Pageable pageable) {
+        return fileStorageService.list(jwt.getSubject(), pageable).map(FileResponse::from);
+    }
+
+    @GetMapping("/{id}")
+    FileResponse get(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
+        return FileResponse.from(fileStorageService.get(jwt.getSubject(), id));
     }
 
     @GetMapping("/{id}/download")
