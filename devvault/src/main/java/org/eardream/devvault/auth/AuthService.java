@@ -65,7 +65,7 @@ public class AuthService {
         refreshTokenService.revoke(refreshToken);
     }
 
-    private AuthToken createTokens(User user) {
+    AuthToken createTokens(User user) {
         return jwtService.createToken(user, refreshTokenService.issue(user));
     }
 }
