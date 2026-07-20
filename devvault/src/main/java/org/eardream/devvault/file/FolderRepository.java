@@ -10,6 +10,8 @@ public interface FolderRepository extends JpaRepository<Folder, Long> {
 
     List<Folder> findAllByOwnerEmailAndParentIdOrderByNameAsc(String email, Long parentId);
 
+    List<Folder> findAllByOwnerEmailAndParentIsNullOrderByNameAsc(String email);
+
     boolean existsByOwnerEmailAndParentIdAndName(String email, Long parentId, String name);
 
     boolean existsByOwnerEmailAndParentIdAndNameAndIdNot(String email, Long parentId, String name, Long id);

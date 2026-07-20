@@ -28,6 +28,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/files")
@@ -57,8 +59,8 @@ public class FileController {
     }
 
     @GetMapping("/{id}")
-    FileResponse get(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
-        return FileResponse.from(fileStorageService.get(jwt.getSubject(), id));
+    FileDetailResponse get(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
+        return FileDetailResponse.from(fileStorageService.getDetail(jwt.getSubject(), id));
     }
 
     @PatchMapping("/{id}")
@@ -116,6 +118,20 @@ public class FileController {
             return new FileResponse(file.getId(), file.getOriginalName(),
                     file.getFolder() == null ? null : file.getFolder().getId(), file.getContentType(),
                     file.getSize(), file.getChecksum(), file.getCreatedAt());
+        }
+    }
+
+    public record FileDetailResponse(Long id, String originalName, Long folderId, String contentType, long size,
+                                     String checksum, Instant createdAt,
+                                     List<TagController.TagResponse> tags) {
+        static FileDetailResponse from(StoredFile file) {
+            List<TagController.TagResponse> tags = file.getTags().stream()
+                    .sorted(Comparator.comparing(Tag::getName, String.CASE_INSENSITIVE_ORDER))
+                    .map(TagController.TagResponse::from)
+                    .toList();
+            return new FileDetailResponse(file.getId(), file.getOriginalName(),
+                    file.getFolder() == null ? null : file.getFolder().getId(), file.getContentType(),
+                    file.getSize(), file.getChecksum(), file.getCreatedAt(), tags);
         }
     }
 }

@@ -66,6 +66,11 @@ public class FolderService {
     }
 
     @Transactional(readOnly = true)
+    public List<Folder> roots(String ownerEmail) {
+        return folderRepository.findAllByOwnerEmailAndParentIsNullOrderByNameAsc(ownerEmail);
+    }
+
+    @Transactional(readOnly = true)
     public FolderChildren children(String ownerEmail, Long folderId, Pageable pageable) {
         findOwned(folderId, ownerEmail);
         List<Folder> folders = folderRepository

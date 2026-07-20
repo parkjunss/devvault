@@ -42,11 +42,22 @@ public class TagService {
 
     @Transactional
     public void attach(String ownerEmail, Long fileId, Long tagId) {
-        StoredFile file = fileRepository.findByIdAndOwnerEmail(fileId, ownerEmail)
+        ownedFile(ownerEmail, fileId).attachTag(ownedTag(ownerEmail, tagId));
+    }
+
+    @Transactional
+    public void detach(String ownerEmail, Long fileId, Long tagId) {
+        ownedFile(ownerEmail, fileId).detachTag(ownedTag(ownerEmail, tagId));
+    }
+
+    private StoredFile ownedFile(String ownerEmail, Long fileId) {
+        return fileRepository.findByIdAndOwnerEmail(fileId, ownerEmail)
                 .orElseThrow(TagService::notFound);
-        Tag tag = tagRepository.findByIdAndOwnerEmail(tagId, ownerEmail)
+    }
+
+    private Tag ownedTag(String ownerEmail, Long tagId) {
+        return tagRepository.findByIdAndOwnerEmail(tagId, ownerEmail)
                 .orElseThrow(TagService::notFound);
-        file.attachTag(tag);
     }
 
     private static String validateName(String requestedName) {

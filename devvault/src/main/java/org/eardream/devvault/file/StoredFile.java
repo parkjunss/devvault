@@ -80,4 +80,8 @@ public class StoredFile {
     void attachTag(Tag tag) {
         tags.add(tag);
     }
+
+    void detachTag(Tag tag) {
+        tags.remove(tag);
+    }
 }

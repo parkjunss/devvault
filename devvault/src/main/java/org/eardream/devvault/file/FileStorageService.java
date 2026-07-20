@@ -113,6 +113,12 @@ public class FileStorageService {
                 .orElseThrow(FileStorageService::notFound);
     }
 
+    @Transactional(readOnly = true)
+    public StoredFile getDetail(String ownerEmail, Long fileId) {
+        return storedFileRepository.findOneByIdAndOwnerEmail(fileId, ownerEmail)
+                .orElseThrow(FileStorageService::notFound);
+    }
+
     @Transactional
     public StoredFile update(String ownerEmail, Long fileId, String requestedName,
                              boolean folderChanged, Long folderId) {

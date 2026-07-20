@@ -52,6 +52,11 @@ public class FolderController {
                 jwt.getSubject(), id, request.name(), parentChanged, parentId));
     }
 
+    @GetMapping
+    List<FolderResponse> roots(@AuthenticationPrincipal Jwt jwt) {
+        return folderService.roots(jwt.getSubject()).stream().map(FolderResponse::from).toList();
+    }
+
     @GetMapping("/{id}/children")
     FolderChildrenResponse children(@AuthenticationPrincipal Jwt jwt,
                                     @PathVariable Long id,

@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -125,6 +126,23 @@ class FileStorageServiceTest {
                 () -> service.get("other@example.com", 7L));
 
         assertEquals(404, exception.getStatusCode().value());
+    }
+
+    @Test
+    void returnsFileDetailsWithSortedTags() {
+        StoredFileRepository fileRepository = mock(StoredFileRepository.class);
+        String email = "owner@example.com";
+        StoredFile file = StoredFile.builder().id(7L).originalName("code.java")
+                .tags(Set.of(Tag.builder().id(2L).name("spring").build(),
+                        Tag.builder().id(1L).name("java").build()))
+                .build();
+        when(fileRepository.findOneByIdAndOwnerEmail(7L, email)).thenReturn(Optional.of(file));
+        FileStorageService service = service(fileRepository, mock(UserRepository.class));
+
+        FileController.FileDetailResponse response = FileController.FileDetailResponse.from(
+                service.getDetail(email, 7L));
+
+        assertEquals(List.of("java", "spring"), response.tags().stream().map(TagController.TagResponse::name).toList());
     }
 
     @Test

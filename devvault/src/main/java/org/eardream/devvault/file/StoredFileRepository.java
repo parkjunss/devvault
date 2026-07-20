@@ -2,6 +2,7 @@ package org.eardream.devvault.file;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -35,4 +36,7 @@ public interface StoredFileRepository extends JpaRepository<StoredFile, Long> {
                             Pageable pageable);
 
     Optional<StoredFile> findByIdAndOwnerEmail(Long id, String email);
+
+    @EntityGraph(attributePaths = "tags")
+    Optional<StoredFile> findOneByIdAndOwnerEmail(Long id, String email);
 }

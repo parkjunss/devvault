@@ -5,9 +5,12 @@ import org.eardream.devvault.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -60,5 +63,22 @@ class TagServiceTest {
                 () -> service.attach(email, 7L, 3L));
 
         assertEquals(404, exception.getStatusCode().value());
+    }
+
+    @Test
+    void detachesAnOwnedTagFromAnOwnedFile() {
+        TagRepository tagRepository = mock(TagRepository.class);
+        StoredFileRepository fileRepository = mock(StoredFileRepository.class);
+        String email = "owner@example.com";
+        Tag tag = Tag.builder().id(3L).name("java").build();
+        StoredFile file = StoredFile.builder().id(7L).originalName("code.java")
+                .tags(new HashSet<>(List.of(tag))).build();
+        when(tagRepository.findByIdAndOwnerEmail(3L, email)).thenReturn(Optional.of(tag));
+        when(fileRepository.findByIdAndOwnerEmail(7L, email)).thenReturn(Optional.of(file));
+        TagService service = new TagService(tagRepository, fileRepository, mock(UserRepository.class));
+
+        service.detach(email, 7L, 3L);
+
+        assertFalse(file.getTags().contains(tag));
     }
 }

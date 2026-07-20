@@ -60,6 +60,19 @@ class FolderServiceTest {
     }
 
     @Test
+    void listsOnlyOwnedRootFolders() {
+        FolderRepository folderRepository = mock(FolderRepository.class);
+        String email = "owner@example.com";
+        Folder root = Folder.builder().id(10L).name("root").build();
+        when(folderRepository.findAllByOwnerEmailAndParentIsNullOrderByNameAsc(email))
+                .thenReturn(List.of(root));
+        FolderService service = new FolderService(
+                folderRepository, mock(StoredFileRepository.class), mock(UserRepository.class));
+
+        assertEquals(List.of(root), service.roots(email));
+    }
+
+    @Test
     void hidesAnotherUsersParentFolder() {
         FolderRepository folderRepository = mock(FolderRepository.class);
         StoredFileRepository fileRepository = mock(StoredFileRepository.class);
