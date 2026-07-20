@@ -7,8 +7,11 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -17,6 +20,8 @@ import lombok.NoArgsConstructor;
 import org.eardream.devvault.user.entity.User;
 
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "stored_files")
@@ -56,11 +61,23 @@ public class StoredFile {
     @Builder.Default
     private Instant createdAt = Instant.now();
 
+    @ManyToMany
+    @JoinTable(name = "file_tags",
+            joinColumns = @JoinColumn(name = "file_id"),
+            inverseJoinColumns = @JoinColumn(name = "tag_id"),
+            uniqueConstraints = @UniqueConstraint(columnNames = {"file_id", "tag_id"}))
+    @Builder.Default
+    private Set<Tag> tags = new HashSet<>();
+
     void rename(String name) {
         this.originalName = name;
     }
 
     void moveTo(Folder folder) {
         this.folder = folder;
+    }
+
+    void attachTag(Tag tag) {
+        tags.add(tag);
     }
 }
