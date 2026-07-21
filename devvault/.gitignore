@@ -38,3 +38,5 @@ out/
 
 ### Local secrets ###
 .env
+nginx/certs/*
+!nginx/certs/.gitkeep
