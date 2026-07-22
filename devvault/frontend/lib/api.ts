@@ -44,6 +44,37 @@ export async function apiFetch(path: string, init: RequestInit = {}, retry = tru
   return response;
 }
 
+function uploadRequest(path: string, body: FormData, onProgress: (loaded: number, total: number) => void) {
+  return new Promise<Response>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("POST", path);
+    const token = getAccessToken();
+    if (token) request.setRequestHeader("Authorization", `Bearer ${token}`);
+    request.upload.onprogress = event => onProgress(event.loaded, event.lengthComputable ? event.total : 0);
+    request.onerror = () => reject(new TypeError("네트워크 연결이 끊어졌습니다."));
+    request.onabort = () => reject(new DOMException("업로드가 취소되었습니다.", "AbortError"));
+    request.onload = () => resolve(new Response(
+      request.status === 204 ? null : request.responseText,
+      { status: request.status, statusText: request.statusText }
+    ));
+    request.send(body);
+  });
+}
+
+export async function apiUpload(
+  path: string,
+  body: FormData,
+  onProgress: (loaded: number, total: number) => void,
+  retry = true
+): Promise<Response> {
+  const response = await uploadRequest(path, body, onProgress);
+  if (response.status === 401 && retry && await refreshAccessToken()) {
+    onProgress(0, 0);
+    return apiUpload(path, body, onProgress, false);
+  }
+  return response;
+}
+
 export async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await apiFetch(path, init);
   if (!response.ok) throw new Error((await response.text()) || `요청에 실패했습니다. (${response.status})`);

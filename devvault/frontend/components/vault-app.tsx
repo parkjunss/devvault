@@ -10,7 +10,7 @@ import {
   SlidersHorizontal, Star, Trash, UploadSimple, UserCircle, Users, X
 } from "@phosphor-icons/react";
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { apiFetch, apiJson } from "@/lib/api";
+import { apiFetch, apiJson, apiUpload } from "@/lib/api";
 import { clearTokens, getAccessToken, getRefreshToken } from "@/lib/auth";
 import type { Folder, PageResponse, Tag, VaultFile } from "@/lib/types";
 
@@ -114,6 +114,7 @@ export function VaultApp() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
+  const [uploadProgress, setUploadProgress] = useState<{ name: string; loaded: number; total: number } | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [openFileMenuId, setOpenFileMenuId] = useState<number | null>(null);
   const [openFolderMenuId, setOpenFolderMenuId] = useState<number | null>(null);
@@ -255,6 +256,9 @@ export function VaultApp() {
 
   const recent = useMemo(() => files.slice().sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)).slice(0, 3), [files]);
   const usedPercent = Math.min(100, Math.max(0, (dashboard.usedBytes / dashboard.quotaBytes) * 100));
+  const uploadPercent = uploadProgress
+    ? Math.min(100, Math.round((uploadProgress.loaded / Math.max(uploadProgress.total, 1)) * 100))
+    : 0;
   const user = profileName || "사용자";
   const subtitleUrl = subtitle && subtitle.fileId === selectedId ? subtitle.url : null;
 
@@ -275,14 +279,18 @@ export function VaultApp() {
     const body = new FormData();
     body.append("file", file);
     if (currentFolder) body.append("folderId", String(currentFolder.id));
+    setUploadProgress({ name: file.name, loaded: 0, total: file.size });
     try {
-      const response = await apiFetch("/api/files", { method: "POST", body });
+      const response = await apiUpload("/api/files", body, (loaded, total) => {
+        setUploadProgress({ name: file.name, loaded, total: total || file.size });
+      });
       if (!response.ok) throw new Error();
       notify("업로드가 완료되었습니다.");
       await load();
     } catch {
       notify("업로드에 실패했습니다.");
     } finally {
+      setUploadProgress(null);
       event.target.value = "";
     }
   }
@@ -486,13 +494,18 @@ export function VaultApp() {
           <div><h1>{currentFolder?.name || navItems.find(item => item.id === nav)?.label}</h1>{currentFolder && <button className="breadcrumb" onClick={() => setCurrentFolder(null)}>파일 / {currentFolder.name}</button>}</div>
           <div className="headerActions">
             <input ref={uploadRef} type="file" hidden onChange={upload} />
-            <button className="primaryButton" onClick={() => uploadRef.current?.click()}><UploadSimple />업로드</button>
+            <button className="primaryButton" disabled={Boolean(uploadProgress)} onClick={() => uploadRef.current?.click()}><UploadSimple />{uploadProgress ? `${uploadPercent}%` : "업로드"}</button>
             <div className="viewToggle" aria-label="보기 방식">
               <button className={view === "list" ? "active" : ""} onClick={() => setView("list")}><List />목록</button>
               <button className={view === "grid" ? "active" : ""} onClick={() => setView("grid")}><GridFour />그리드</button>
             </div>
           </div>
         </div>
+
+        {uploadProgress && <div className="uploadProgress" role="status" aria-live="polite">
+          <div><strong>{uploadProgress.name}</strong><span>{formatStorage(uploadProgress.loaded)} / {formatStorage(uploadProgress.total)} · {uploadPercent}%</span></div>
+          <div className="uploadProgressTrack" aria-label={`업로드 진행률 ${uploadPercent}%`}><span style={{ width: `${uploadPercent}%` }} /></div>
+        </div>}
 
         {nav === "all" && !query && !currentFolder && <section className="recentSection" aria-labelledby="recent-title">
           <h2 id="recent-title">최근 항목</h2>
