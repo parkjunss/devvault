@@ -1,17 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, ShieldCheck } from "@phosphor-icons/react";
 import { saveTokens } from "@/lib/auth";
 import type { AuthToken } from "@/lib/types";
 
-export function LoginForm({ initialSignup = false }: { initialSignup?: boolean }) {
+export function LoginForm({ initialSignup = false, initialError = "" }: { initialSignup?: boolean; initialError?: string }) {
   const router = useRouter();
   const [signup, setSignup] = useState(initialSignup);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(initialError);
+
+  useEffect(() => {
+    const fragment = new URLSearchParams(window.location.hash.slice(1));
+    const accessToken = fragment.get("accessToken");
+    const refreshToken = fragment.get("refreshToken");
+    if (accessToken && refreshToken) {
+      saveTokens({ accessToken, refreshToken, tokenType: "Bearer", expiresIn: 0 });
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      router.replace("/files");
+    }
+  }, [router]);
 
   async function submit(formData: FormData) {
     setLoading(true);
@@ -50,7 +61,12 @@ export function LoginForm({ initialSignup = false }: { initialSignup?: boolean }
             <h2>{signup ? "계정 만들기" : "다시 오신 것을 환영합니다"}</h2>
             <p>{signup ? "DevVault를 시작하는 데 1분이면 충분합니다." : "계속하려면 계정에 로그인하세요."}</p>
           </header>
-          {signup && <label>이름<input name="username" required maxLength={50} autoComplete="name" placeholder="김도현" /></label>}
+          <a className="googleLoginButton" href="/oauth2/authorization/google" onClick={() => setLoading(true)}>
+            <span aria-hidden="true">G</span>Google로 계속하기
+          </a>
+          <p className="oauthConsent">계속하면 <Link href="/terms" target="_blank">이용약관</Link>과 <Link href="/privacy" target="_blank">개인정보처리방침</Link>에 동의하게 됩니다.</p>
+          <div className="loginDivider"><span>또는 이메일로 계속</span></div>
+          {signup && <label>이름<input name="username" required maxLength={50} autoComplete="name" placeholder="이름" /></label>}
           <label>이메일<input name="email" type="email" required maxLength={50} autoComplete="email" placeholder="you@example.com" /></label>
           <label>비밀번호<input name="password" type="password" required minLength={signup ? 8 : undefined} maxLength={72} autoComplete={signup ? "new-password" : "current-password"} placeholder="8자 이상 입력" /></label>
           {signup && <fieldset className="legalConsent">

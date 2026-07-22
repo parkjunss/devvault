@@ -1,8 +1,19 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Eye, FolderSimple, LinkSimple, ShieldCheck } from "@phosphor-icons/react/dist/ssr";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { ArrowRight, Eye, FolderSimple, LinkSimple, ShieldCheck } from "@phosphor-icons/react";
+import { getAccessToken } from "@/lib/auth";
 
 export default function Home() {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (getAccessToken()) router.replace("/files");
+  }, [router]);
+
   return (
     <main className="landingPage">
       <header className="landingNav">

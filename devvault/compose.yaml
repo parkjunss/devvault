@@ -20,10 +20,13 @@ services:
   frontend:
     build:
       context: ./frontend
+      args:
+        NEXT_PUBLIC_UPGRADE_URL: ${NEXT_PUBLIC_UPGRADE_URL:-}
     image: devvault-frontend:local
     restart: unless-stopped
     environment:
       BACKEND_URL: http://app:8080
+      HOSTNAME: 0.0.0.0
     ports:
       - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
     depends_on:

@@ -117,9 +117,10 @@ Ubuntu `aarch64` 라즈베리파이에서 Docker Compose로 운영하는 개인 
 
 ## 알려진 미완료 항목
 
+- 문서·이미지·동영상 편집 기능: [편집 로드맵](devvault/docs/content-editing-plan.md) 작성 완료, 구현 전
 - Prometheus, Grafana, node-exporter, cAdvisor Compose 서비스
 - 백업·복구 스크립트와 실제 복구 테스트
-- GitHub Actions `ci.yml`, `deploy.yml`
+- GitHub Actions CI 검증 workflow (`deploy.yml` 자동 배포는 구현 완료)
 - GHCR ARM64 이미지 빌드와 라즈베리파이 자동 배포
 - GitHub·Naver OAuth 제공자 추가
 - 외부 도메인, 실제 인증서, HTTPS 운영 검증

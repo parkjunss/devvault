@@ -1,11 +1,11 @@
 FROM node:22-alpine AS build
 
 WORKDIR /app
+ARG NEXT_PUBLIC_UPGRADE_URL
+ENV NEXT_PUBLIC_UPGRADE_URL=$NEXT_PUBLIC_UPGRADE_URL
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
-ARG NEXT_PUBLIC_DEMO_MODE=false
-ENV NEXT_PUBLIC_DEMO_MODE=$NEXT_PUBLIC_DEMO_MODE
 RUN npm run build
 
 FROM node:22-alpine

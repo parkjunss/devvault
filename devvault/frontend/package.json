@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test:refresh": "node scripts/check-refresh-single-flight.cjs"
   },
   "dependencies": {
     "@fontsource-variable/noto-sans-kr": "^5.2.8",

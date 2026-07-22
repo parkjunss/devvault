@@ -1,7 +1,19 @@
 import { clearTokens, getAccessToken, getRefreshToken, saveTokens } from "./auth";
 import type { AuthToken } from "./types";
 
+let refreshRequest: Promise<boolean> | null = null;
+
 async function refreshAccessToken() {
+  if (refreshRequest) return refreshRequest;
+  refreshRequest = refreshTokens();
+  try {
+    return await refreshRequest;
+  } finally {
+    refreshRequest = null;
+  }
+}
+
+async function refreshTokens() {
   const refreshToken = getRefreshToken();
   if (!refreshToken) return false;
   const response = await fetch("/api/auth/refresh", {
