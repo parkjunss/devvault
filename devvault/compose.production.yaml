@@ -1,4 +1,11 @@
 services:
+  app:
+    networks:
+      default:
+      marketboard:
+        aliases:
+          - devvault-app
+
   frontend:
     networks:
       default:
