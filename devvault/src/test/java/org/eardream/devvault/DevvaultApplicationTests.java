@@ -24,7 +24,7 @@ class DevvaultApplicationTests {
     @Test
     void executesCombinedFileSearchQuery() {
         var result = storedFileRepository.search(
-                "missing-user@example.com", "report", "pdf", "java", true, PageRequest.of(0, 20));
+                "missing-user@example.com", "report", "pdf", "java", true, false, PageRequest.of(0, 20));
 
         assertTrue(result.isEmpty());
     }

@@ -9,7 +9,7 @@ import {
   GridFour, List, MagnifyingGlass, MusicNotes, PencilSimple, Plus, ShareNetwork, ShieldCheck, SignOut,
   SlidersHorizontal, Star, Trash, UploadSimple, UserCircle, Users, X
 } from "@phosphor-icons/react";
-import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch, apiJson, apiUpload } from "@/lib/api";
 import { clearTokens, getAccessToken, getRefreshToken } from "@/lib/auth";
 import type { Folder, PageResponse, Tag, VaultFile } from "@/lib/types";
@@ -18,6 +18,8 @@ type Nav = "all" | "favorite" | "recent" | "shared" | "trash";
 type View = "list" | "grid";
 type Dashboard = { fileCount: number; usedBytes: number; quotaBytes: number };
 type UserProfile = { username: string; hasProfileImage: boolean };
+type ActionTarget = { type: "file"; item: VaultFile } | { type: "folder"; item: Folder };
+type ActionDialog = { action: "rename" | "delete"; target: ActionTarget; value: string; permanent: boolean };
 
 const navItems: { id: Nav; label: string; icon: typeof FolderIcon }[] = [
   { id: "all", label: "파일", icon: FolderIcon },
@@ -125,6 +127,8 @@ export function VaultApp() {
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
   const [subtitle, setSubtitle] = useState<{ fileId: number; url: string } | null>(null);
   const [playbackRate, setPlaybackRate] = useState(1);
+  const [actionDialog, setActionDialog] = useState<ActionDialog | null>(null);
+  const [actionPending, setActionPending] = useState(false);
 
   useEffect(() => {
     let objectUrl: string | null = null;
@@ -162,6 +166,7 @@ export function VaultApp() {
       if (filterExtension.trim()) params.set("extension", filterExtension.trim().replace(/^\./, ""));
       if (filterTag.trim()) params.set("tag", filterTag.trim());
       if (nav === "favorite") params.set("favorite", "true");
+      if (nav === "all" && !currentFolder && !query) params.set("rootOnly", "true");
       const filePath = nav === "trash" ? `/api/files/trash?${params}` : `/api/files?${params}`;
       const [rootFolders, result, summary] = await Promise.all([
         apiJson<Folder[]>("/api/folders"),
@@ -216,6 +221,7 @@ export function VaultApp() {
       closePopovers();
       setFilterOpen(false);
       setPreviewExpanded(false);
+      setActionDialog(null);
     };
     window.addEventListener("click", closePopovers);
     window.addEventListener("keydown", closeOnEscape);
@@ -301,43 +307,14 @@ export function VaultApp() {
     if (selected?.id === file.id) setSelected({ ...selected, favorite: !selected.favorite });
   }
 
-  async function renameFile(file: VaultFile) {
-    const name = window.prompt("새 파일 이름을 입력하세요.", file.originalName)?.trim();
-    if (!name || name === file.originalName) return;
-    try {
-      const response = await apiFetch(`/api/files/${file.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ name })
-      });
-      if (!response.ok) throw new Error();
-      setOpenFileMenuId(null);
-      if (selected?.id === file.id) setSelected({ ...selected, originalName: name });
-      await load();
-      notify("파일 이름을 변경했습니다.");
-    } catch {
-      notify("파일 이름을 변경하지 못했습니다.");
-    }
+  function renameFile(file: VaultFile) {
+    setOpenFileMenuId(null);
+    setActionDialog({ action: "rename", target: { type: "file", item: file }, value: file.originalName, permanent: false });
   }
 
-  async function deleteFile(file: VaultFile) {
-    const permanent = nav === "trash";
-    const confirmed = window.confirm(permanent
-      ? `\"${file.originalName}\" 파일을 영구 삭제할까요? 이 작업은 되돌릴 수 없습니다.`
-      : `\"${file.originalName}\" 파일을 휴지통으로 이동할까요?`);
-    if (!confirmed) return;
-    try {
-      const response = await apiFetch(
-        permanent ? `/api/files/${file.id}/permanent` : `/api/files/${file.id}`,
-        { method: "DELETE" }
-      );
-      if (!response.ok) throw new Error();
-      setOpenFileMenuId(null);
-      if (selected?.id === file.id) setSelected(null);
-      await load();
-      notify(permanent ? "파일을 영구 삭제했습니다." : "파일을 휴지통으로 이동했습니다.");
-    } catch {
-      notify("파일을 삭제하지 못했습니다.");
-    }
+  function deleteFile(file: VaultFile) {
+    setOpenFileMenuId(null);
+    setActionDialog({ action: "delete", target: { type: "file", item: file }, value: "", permanent: nav === "trash" });
   }
 
   async function restoreFile(file: VaultFile) {
@@ -369,34 +346,53 @@ export function VaultApp() {
     }
   }
 
-  async function renameFolder(folder: Folder) {
-    const name = window.prompt("새 폴더 이름을 입력하세요.", folder.name)?.trim();
-    if (!name || name === folder.name) return;
-    try {
-      const response = await apiFetch(`/api/folders/${folder.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ name })
-      });
-      if (!response.ok) throw new Error();
-      setOpenFolderMenuId(null);
-      if (currentFolder?.id === folder.id) setCurrentFolder({ ...currentFolder, name });
-      await load();
-      notify("폴더 이름을 변경했습니다.");
-    } catch {
-      notify("폴더 이름을 변경하지 못했습니다.");
-    }
+  function renameFolder(folder: Folder) {
+    setOpenFolderMenuId(null);
+    setActionDialog({ action: "rename", target: { type: "folder", item: folder }, value: folder.name, permanent: false });
   }
 
-  async function deleteFolder(folder: Folder) {
-    if (!window.confirm(`"${folder.name}" 폴더를 삭제할까요? 빈 폴더만 삭제할 수 있습니다.`)) return;
+  function deleteFolder(folder: Folder) {
+    setOpenFolderMenuId(null);
+    setActionDialog({ action: "delete", target: { type: "folder", item: folder }, value: "", permanent: false });
+  }
+
+  async function submitAction(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!actionDialog) return;
+    const { action, target, permanent } = actionDialog;
+    const oldName = target.type === "file" ? target.item.originalName : target.item.name;
+    const name = actionDialog.value.trim();
+    if (action === "rename" && (!name || name === oldName)) return;
+    const path = target.type === "file"
+      ? permanent ? `/api/files/${target.item.id}/permanent` : `/api/files/${target.item.id}`
+      : `/api/folders/${target.item.id}`;
+    setActionPending(true);
     try {
-      const response = await apiFetch(`/api/folders/${folder.id}`, { method: "DELETE" });
+      const response = await apiFetch(path, action === "rename"
+        ? { method: "PATCH", body: JSON.stringify({ name }) }
+        : { method: "DELETE" });
       if (!response.ok) throw new Error();
+      if (target.type === "file" && selected?.id === target.item.id) {
+        setSelected(action === "rename" ? { ...selected, originalName: name } : null);
+      }
+      if (target.type === "folder" && action === "rename" && currentFolder?.id === target.item.id) {
+        setCurrentFolder({ ...currentFolder, name });
+      }
+      setOpenFileMenuId(null);
       setOpenFolderMenuId(null);
+      setActionDialog(null);
       await load();
-      notify("폴더를 삭제했습니다.");
+      notify(action === "rename"
+        ? `${target.type === "file" ? "파일" : "폴더"} 이름을 변경했습니다.`
+        : target.type === "folder" ? "폴더를 삭제했습니다."
+        : permanent ? "파일을 영구 삭제했습니다." : "파일을 휴지통으로 이동했습니다.");
     } catch {
-      notify("폴더를 삭제하지 못했습니다. 폴더가 비어 있는지 확인해 주세요.");
+      notify(action === "rename"
+        ? `${target.type === "file" ? "파일" : "폴더"} 이름을 변경하지 못했습니다.`
+        : target.type === "folder" ? "폴더를 삭제하지 못했습니다. 폴더가 비어 있는지 확인해 주세요."
+        : "파일을 삭제하지 못했습니다.");
+    } finally {
+      setActionPending(false);
     }
   }
 
@@ -520,7 +516,7 @@ export function VaultApp() {
 
         <section className="filesSection" aria-labelledby="files-title">
           <div className="sectionTitle">
-            <h2 id="files-title">{nav === "all" ? "모든 파일" : navItems.find(item => item.id === nav)?.label}</h2>
+            <h2 id="files-title">{nav === "all" ? query ? "검색 결과" : currentFolder ? "폴더 내용" : "파일 및 폴더" : navItems.find(item => item.id === nav)?.label}</h2>
             <div className="filterWrap" onClick={event => event.stopPropagation()}>
               <button className={`iconButton ${filterOpen || filterExtension || filterTag ? "active" : ""}`} aria-label="필터" aria-expanded={filterOpen} onClick={() => setFilterOpen(open => !open)}><SlidersHorizontal /></button>
               {filterOpen && <div className="filterPopover">
@@ -589,6 +585,13 @@ export function VaultApp() {
         {!!selected.tags?.length && <div className="tags"><span>태그</span><div>{selected.tags.map((tag: Tag) => <span key={tag.id}>{tag.name}</span>)}</div></div>}
         <div className="previewActions"><button className="primaryButton" onClick={download}><DownloadSimple />다운로드</button><button className="secondaryButton" onClick={share}><ShareNetwork />공유</button></div>
       </aside>}
+      {actionDialog && <div className="modalBackdrop" onMouseDown={() => !actionPending && setActionDialog(null)}>
+        <form className="actionDialog" role="dialog" aria-modal="true" aria-labelledby="action-dialog-title" aria-describedby="action-dialog-description" onSubmit={submitAction} onMouseDown={event => event.stopPropagation()}>
+          <header><h2 id="action-dialog-title">{actionDialog.action === "rename" ? "이름 바꾸기" : actionDialog.permanent ? "영구 삭제" : "삭제"}</h2><button type="button" className="iconButton" aria-label="닫기" disabled={actionPending} onClick={() => setActionDialog(null)}><X /></button></header>
+          {actionDialog.action === "rename" ? <label id="action-dialog-description">새 이름<input autoFocus required maxLength={actionDialog.target.type === "folder" ? 100 : 255} value={actionDialog.value} onChange={event => setActionDialog({ ...actionDialog, value: event.target.value })} /></label> : <p id="action-dialog-description"><strong>{actionDialog.target.type === "file" ? actionDialog.target.item.originalName : actionDialog.target.item.name}</strong>{actionDialog.target.type === "folder" ? " 폴더를 삭제할까요? 빈 폴더만 삭제할 수 있습니다." : actionDialog.permanent ? " 파일을 영구 삭제할까요? 이 작업은 되돌릴 수 없습니다." : " 파일을 휴지통으로 이동할까요?"}</p>}
+          <footer><button type="button" className="secondaryButton" disabled={actionPending} onClick={() => setActionDialog(null)}>취소</button><button type="submit" className={actionDialog.action === "delete" ? "dangerButton" : "primaryButton"} disabled={actionPending || (actionDialog.action === "rename" && !actionDialog.value.trim())}>{actionPending ? "처리 중..." : actionDialog.action === "rename" ? "변경" : "삭제"}</button></footer>
+        </form>
+      </div>}
       {toast && <div className="toast" role="status"><Check weight="bold" />{toast}</div>}
     </main>
   );

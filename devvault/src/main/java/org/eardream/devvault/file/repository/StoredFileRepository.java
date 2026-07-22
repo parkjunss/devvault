@@ -28,6 +28,7 @@ public interface StoredFileRepository extends JpaRepository<StoredFile, Long> {
               and (:extension is null or lower(file.originalName) like concat('%.', :extension))
               and (:tagName is null or lower(tag.name) = :tagName)
               and (:favorite is null or file.favorite = :favorite)
+              and (:rootOnly = false or file.folder is null)
             """, countQuery = """
             select count(distinct file.id) from StoredFile file
             left join file.tags tag
@@ -37,12 +38,14 @@ public interface StoredFileRepository extends JpaRepository<StoredFile, Long> {
               and (:extension is null or lower(file.originalName) like concat('%.', :extension))
               and (:tagName is null or lower(tag.name) = :tagName)
               and (:favorite is null or file.favorite = :favorite)
+              and (:rootOnly = false or file.folder is null)
             """)
     Page<StoredFile> search(@Param("ownerEmail") String ownerEmail,
                             @Param("fileName") String fileName,
                             @Param("extension") String extension,
                             @Param("tagName") String tagName,
                             @Param("favorite") Boolean favorite,
+                            @Param("rootOnly") boolean rootOnly,
                             Pageable pageable);
 
     Optional<StoredFile> findFirstByOwnerEmailAndChecksum(String ownerEmail, String checksum);

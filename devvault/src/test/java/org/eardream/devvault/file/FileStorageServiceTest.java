@@ -141,13 +141,26 @@ class FileStorageServiceTest {
     void combinesNormalizedFileNameExtensionAndTagFilters() {
         StoredFileRepository fileRepository = mock(StoredFileRepository.class);
         var pageable = PageRequest.of(0, 20);
-        when(fileRepository.search("owner@example.com", "report", "pdf", "java", true, pageable))
+        when(fileRepository.search("owner@example.com", "report", "pdf", "java", true, false, pageable))
                 .thenReturn(new PageImpl<>(List.of(), pageable, 0));
         FileStorageService service = service(fileRepository, mock(UserRepository.class));
 
-        service.search("owner@example.com", " Report ", ".PDF", " Java ", true, pageable);
+        service.search("owner@example.com", " Report ", ".PDF", " Java ", true, false, pageable);
 
-        verify(fileRepository).search("owner@example.com", "report", "pdf", "java", true, pageable);
+        verify(fileRepository).search("owner@example.com", "report", "pdf", "java", true, false, pageable);
+    }
+
+    @Test
+    void filtersRootFilesWhenRequested() {
+        StoredFileRepository fileRepository = mock(StoredFileRepository.class);
+        var pageable = PageRequest.of(0, 20);
+        when(fileRepository.search("owner@example.com", null, null, null, null, true, pageable))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+        FileStorageService service = service(fileRepository, mock(UserRepository.class));
+
+        service.search("owner@example.com", null, null, null, null, true, pageable);
+
+        verify(fileRepository).search("owner@example.com", null, null, null, null, true, pageable);
     }
 
     @Test
@@ -155,7 +168,7 @@ class FileStorageServiceTest {
         FileStorageService service = service(mock(StoredFileRepository.class), mock(UserRepository.class));
 
         ResponseStatusException exception = assertThrows(ResponseStatusException.class,
-                () -> service.search("owner@example.com", null, "../pdf", null, null, PageRequest.of(0, 20)));
+                () -> service.search("owner@example.com", null, "../pdf", null, null, false, PageRequest.of(0, 20)));
 
         assertEquals(400, exception.getStatusCode().value());
     }

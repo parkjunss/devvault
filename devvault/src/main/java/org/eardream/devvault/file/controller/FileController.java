@@ -60,9 +60,10 @@ public class FileController {
                             @RequestParam(required = false) String extension,
                             @RequestParam(required = false) String tag,
                             @RequestParam(required = false) Boolean favorite,
+                            @RequestParam(defaultValue = "false") boolean rootOnly,
                             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC)
                             Pageable pageable) {
-        return fileStorageService.search(jwt.getSubject(), name, extension, tag, favorite, pageable)
+        return fileStorageService.search(jwt.getSubject(), name, extension, tag, favorite, rootOnly, pageable)
                 .map(FileResponse::from);
     }
 

@@ -132,14 +132,14 @@ public class FileStorageService {
 
     @Transactional(readOnly = true)
     public Page<StoredFile> search(String ownerEmail, String requestedName, String requestedExtension,
-                                   String requestedTag, Boolean favorite, Pageable pageable) {
+                                   String requestedTag, Boolean favorite, boolean rootOnly, Pageable pageable) {
         String name = normalizeFilter(requestedName, 255, "파일명");
         String extension = normalizeExtension(requestedExtension);
         String tag = normalizeFilter(requestedTag, 50, "태그");
-        if (name == null && extension == null && tag == null && favorite == null) {
+        if (name == null && extension == null && tag == null && favorite == null && !rootOnly) {
             return list(ownerEmail, pageable);
         }
-        return storedFileRepository.search(ownerEmail, name, extension, tag, favorite, pageable);
+        return storedFileRepository.search(ownerEmail, name, extension, tag, favorite, rootOnly, pageable);
     }
 
     @Transactional
