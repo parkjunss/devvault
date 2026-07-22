@@ -1,0 +1,21 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:devvault;MODE=MySQL;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: test-client
+            client-secret: test-secret
+
+app:
+  jwt:
+    secret: test-secret-at-least-32-bytes-long
+  storage:
+    location: ${java.io.tmpdir}/devvault-uploads

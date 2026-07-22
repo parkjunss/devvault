@@ -64,7 +64,13 @@ Ubuntu `aarch64` 라즈베리파이에서 Docker Compose로 운영하는 개인 
 - 백엔드 멀티스테이지 Dockerfile
 - MySQL·백엔드 Compose 실행 구성
 - Nginx HTTPS 프록시 템플릿
-- 프런트엔드 컨테이너와 Nginx 라우팅 구성은 현재 작업 트리에 반영 중
+- 프런트엔드 컨테이너와 Nginx 라우팅 구성
+
+### 테스트 환경
+
+- 통합 테스트는 운영 MySQL 대신 H2 메모리 DB 사용
+- 테스트 임시 파일은 Gradle `build/tmp/test` 아래에 생성
+- 로컬 `.env`, MySQL 컨테이너 상태와 Windows 시스템 임시 폴더 권한에서 분리
 
 ## 주요 커밋
 
@@ -99,21 +105,18 @@ Ubuntu `aarch64` 라즈베리파이에서 Docker Compose로 운영하는 개인 
 ### 통과
 
 - 백엔드 Java 컴파일
+- 백엔드 전체 테스트 68개
 - 회원가입 동의 검증 단위 테스트
 - 프런트엔드 `npm run lint`
 - 프런트엔드 `npm run build`
 - `docker compose config --quiet`
 
-### 미통과 또는 미확인
+### 미확인
 
-- 백엔드 전체 테스트: 68개 중 43개 통과, 25개 실패
-  - 4개: 테스트 Spring Context의 MySQL 연결 초기화 실패
-  - 21개: Windows 테스트 임시 파일 경로 `AccessDeniedException`
 - 라즈베리파이 ARM64 실제 배포와 재부팅 복구 테스트는 아직 수행하지 않음
 
 ## 알려진 미완료 항목
 
-- 테스트가 로컬 MySQL 상태와 Windows 파일 권한에 의존하지 않도록 테스트 환경 분리
 - Prometheus, Grafana, node-exporter, cAdvisor Compose 서비스
 - 백업·복구 스크립트와 실제 복구 테스트
 - GitHub Actions `ci.yml`, `deploy.yml`
@@ -123,8 +126,7 @@ Ubuntu `aarch64` 라즈베리파이에서 Docker Compose로 운영하는 개인 
 
 ## 다음 우선순위
 
-1. 백엔드 테스트용 DB와 임시 저장 경로를 운영 환경에서 분리해 전체 테스트를 통과시킨다.
-2. Prometheus·Grafana 모니터링 스택을 Compose에 추가한다.
-3. CI/CD 워크플로와 ARM64 라즈베리파이 배포를 구현한다.
+1. Prometheus·Grafana 모니터링 스택을 Compose에 추가한다.
+2. CI/CD 워크플로와 ARM64 라즈베리파이 배포를 구현한다.
 
-새 기능을 더하기 전에 1번을 끝내 테스트를 재현 가능한 상태로 만드는 것이 우선이다.
+다음 단계는 운영 상태를 확인할 수 있도록 1번 모니터링 스택을 완성하는 것이다.
