@@ -21,6 +21,7 @@ services:
     build:
       context: ./frontend
       args:
+        BACKEND_URL: http://app:8080
         NEXT_PUBLIC_UPGRADE_URL: ${NEXT_PUBLIC_UPGRADE_URL:-}
     image: devvault-frontend:local
     restart: unless-stopped

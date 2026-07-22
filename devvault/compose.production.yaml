@@ -1,0 +1,12 @@
+services:
+  frontend:
+    networks:
+      default:
+      marketboard:
+        aliases:
+          - devvault-frontend
+
+networks:
+  marketboard:
+    external: true
+    name: marketboard_marketboard
