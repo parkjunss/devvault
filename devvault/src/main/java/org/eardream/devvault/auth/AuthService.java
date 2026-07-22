@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Locale;
+import java.time.Instant;
 
 @Service
 @RequiredArgsConstructor
@@ -40,6 +41,8 @@ public class AuthService {
                 .email(normalizedEmail)
                 .password(passwordEncoder.encode(password))
                 .username(username.trim())
+                .termsAcceptedAt(Instant.now())
+                .privacyAcceptedAt(Instant.now())
                 .build());
         Role role = roleRepository.findByRole("ROLE_USER")
                 .orElseThrow(() -> new IllegalStateException("ROLE_USER가 초기화되지 않았습니다."));

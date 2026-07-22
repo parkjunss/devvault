@@ -9,6 +9,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.time.Instant;
 
 @Entity
 @Table(name = "users")
@@ -29,6 +30,12 @@ public class User implements UserDetails {
 
     @Column(nullable = false, length = 50)
     private String username;
+
+    @Column(name = "terms_accepted_at")
+    private Instant termsAcceptedAt;
+
+    @Column(name = "privacy_accepted_at")
+    private Instant privacyAcceptedAt;
 
     @Column(nullable = false, columnDefinition = "boolean default true")
     @Builder.Default

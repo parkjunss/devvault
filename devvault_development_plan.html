@@ -597,6 +597,7 @@ Grafana</code></pre>
               <tr><td>Storage</td><td>라즈베리파이 SSD</td><td>원본 파일과 썸네일 저장</td></tr>
               <tr><td>Proxy</td><td>Nginx</td><td>라우팅, HTTPS, 업로드 크기 제한</td></tr>
               <tr><td>Deploy</td><td>Docker Compose</td><td>Ubuntu aarch64에서 모든 서비스 통합 실행</td></tr>
+              <tr><td>CI/CD</td><td>GitHub Actions, GHCR</td><td>테스트 자동화, ARM64 이미지 배포</td></tr>
               <tr><td>Monitoring</td><td>Spring Actuator, Prometheus, Grafana, node-exporter, cAdvisor</td><td>API, JVM, 호스트와 컨테이너 리소스 모니터링</td></tr>
             </tbody>
           </table>
@@ -855,6 +856,7 @@ admin_audit_logs
                 <li>공유 링크 생성과 만료 처리</li>
                 <li>Docker Compose 구성</li>
                 <li>Nginx와 HTTPS 적용</li>
+                <li>GitHub Actions CI/CD와 GHCR 이미지 배포</li>
                 <li>DB·파일 백업 스크립트</li>
                 <li>Actuator, Prometheus, Grafana 연동</li>
                 <li>node-exporter, cAdvisor 리소스 수집</li>
@@ -978,8 +980,25 @@ volumes:
             Grafana는 Docker 내부 네트워크에서만 접근하고 Grafana가 필요하면 Nginx를 통해 인증 후 노출한다.
           </div>
 
+          <h4>GitHub Actions CI/CD</h4>
+          <pre><code>Pull Request / Push
+  └─ CI: Gradle 테스트
+
+main 브랜치 Push + CI 성공
+  └─ CD: linux/arm64 이미지 빌드
+       └─ GHCR 푸시
+            └─ SSH로 라즈베리파이 접속
+                 └─ docker compose pull && docker compose up -d</code></pre>
+
+          <div class="callout">
+            워크플로는 <code>.github/workflows/ci.yml</code>과 <code>deploy.yml</code>로 분리한다.
+            서버 주소, 사용자명, SSH 키는 GitHub Actions Secrets에 저장하고 저장소에는 커밋하지 않는다.
+          </div>
+
           <h4>운영 체크리스트</h4>
           <ul class="checklist">
+            <li>GitHub Actions CI 통과 후에만 배포 실행</li>
+            <li>PI_HOST, PI_USER, PI_SSH_KEY Secrets 등록</li>
             <li>DuckDNS 도메인 연결</li>
             <li>Let's Encrypt 인증서 적용</li>
             <li>Docker 볼륨 영속성 확인</li>

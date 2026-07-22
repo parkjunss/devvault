@@ -2,6 +2,7 @@ package org.eardream.devvault.auth;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
@@ -44,7 +45,9 @@ public class AuthController {
     public record SignupRequest(
             @NotBlank @Email @Size(max = 50) String email,
             @NotBlank @Size(min = 8, max = 72) String password,
-            @NotBlank @Size(max = 50) String username) {
+            @NotBlank @Size(max = 50) String username,
+            @AssertTrue(message = "이용약관에 동의해야 합니다.") boolean termsAccepted,
+            @AssertTrue(message = "개인정보처리방침에 동의해야 합니다.") boolean privacyAccepted) {
     }
 
     public record LoginRequest(

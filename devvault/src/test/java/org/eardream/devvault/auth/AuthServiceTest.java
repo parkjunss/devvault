@@ -7,6 +7,7 @@ import org.eardream.devvault.user.repository.UserRepository;
 import org.eardream.devvault.user.repository.UserRoleRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import jakarta.validation.Validation;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -19,6 +20,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.never;
@@ -50,6 +52,20 @@ class AuthServiceTest {
 
         assertEquals("token", token.accessToken());
         verify(userRoleRepository).save(any());
+        verify(userRepository).save(org.mockito.ArgumentMatchers.argThat(user -> {
+            assertNotNull(user.getTermsAcceptedAt());
+            assertNotNull(user.getPrivacyAcceptedAt());
+            return true;
+        }));
+    }
+
+    @Test
+    void signupRequiresBothLegalConsents() {
+        try (var factory = Validation.buildDefaultValidatorFactory()) {
+            var request = new AuthController.SignupRequest(
+                    "user@example.com", "password123", "user", false, false);
+            assertEquals(2, factory.getValidator().validate(request).size());
+        }
     }
 
     @Test

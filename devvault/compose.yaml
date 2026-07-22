@@ -14,9 +14,27 @@ services:
       - ./nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
       - ${TLS_CERT_DIR:-./nginx/certs}:/etc/nginx/certs:ro
     depends_on:
-      app:
+      frontend:
         condition: service_healthy
 
+  frontend:
+    build:
+      context: ./frontend
+    image: devvault-frontend:local
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: http://app:8080
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
   app:
     build:
       context: .
@@ -39,7 +57,7 @@ services:
       UPLOAD_DIR: /data/uploads
       MAX_FILE_SIZE: ${MAX_FILE_SIZE:-200MB}
       MAX_REQUEST_SIZE: ${MAX_REQUEST_SIZE:-200MB}
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
     ports:
       - "127.0.0.1:${APP_PORT:-8080}:8080"
     volumes:
