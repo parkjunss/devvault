@@ -1,5 +1,6 @@
-package org.eardream.devvault.auth;
+package org.eardream.devvault.auth.service;
 
+import org.eardream.devvault.auth.dto.AuthToken;
 import org.eardream.devvault.user.entity.User;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;

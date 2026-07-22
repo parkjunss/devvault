@@ -1,5 +1,7 @@
-package org.eardream.devvault.auth;
+package org.eardream.devvault.auth.service;
 
+import org.eardream.devvault.auth.entity.RefreshToken;
+import org.eardream.devvault.auth.repository.RefreshTokenRepository;
 import org.eardream.devvault.user.entity.User;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,7 +24,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class RefreshTokenServiceTest {
 
-    @Mock RefreshTokenRepository refreshTokenRepository;
+    @Mock
+    RefreshTokenRepository refreshTokenRepository;
 
     @Test
     void issueStoresHashInsteadOfRawToken() {

@@ -1,5 +1,7 @@
 package org.eardream.devvault.auth;
 
+import org.eardream.devvault.auth.dto.AuthToken;
+import org.eardream.devvault.auth.service.JwtService;
 import org.eardream.devvault.user.entity.Role;
 import org.eardream.devvault.user.entity.User;
 import org.eardream.devvault.user.entity.UserRole;

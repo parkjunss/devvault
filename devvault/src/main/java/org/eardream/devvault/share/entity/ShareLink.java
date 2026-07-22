@@ -1,4 +1,4 @@
-package org.eardream.devvault.share;
+package org.eardream.devvault.share.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -14,7 +14,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.eardream.devvault.file.StoredFile;
+import org.eardream.devvault.file.entity.StoredFile;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 

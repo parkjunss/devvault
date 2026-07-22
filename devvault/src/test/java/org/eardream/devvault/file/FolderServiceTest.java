@@ -1,5 +1,10 @@
 package org.eardream.devvault.file;
 
+import org.eardream.devvault.folder.entity.Folder;
+import org.eardream.devvault.file.entity.StoredFile;
+import org.eardream.devvault.folder.repository.FolderRepository;
+import org.eardream.devvault.file.repository.StoredFileRepository;
+import org.eardream.devvault.folder.service.FolderService;
 import org.eardream.devvault.user.entity.User;
 import org.eardream.devvault.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -15,6 +20,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class FolderServiceTest {
@@ -136,5 +143,36 @@ class FolderServiceTest {
         Folder updated = service.update(email, 10L, null, true, null);
 
         assertNull(updated.getParent());
+    }
+
+    @Test
+    void deletesAnEmptyOwnedFolder() {
+        FolderRepository folderRepository = mock(FolderRepository.class);
+        StoredFileRepository fileRepository = mock(StoredFileRepository.class);
+        String email = "owner@example.com";
+        Folder folder = Folder.builder().id(10L).name("empty").build();
+        when(folderRepository.findByIdAndOwnerEmail(10L, email)).thenReturn(Optional.of(folder));
+        FolderService service = new FolderService(folderRepository, fileRepository, mock(UserRepository.class));
+
+        service.delete(email, 10L);
+
+        verify(folderRepository).delete(folder);
+    }
+
+    @Test
+    void rejectsDeletingFolderWithFiles() {
+        FolderRepository folderRepository = mock(FolderRepository.class);
+        StoredFileRepository fileRepository = mock(StoredFileRepository.class);
+        String email = "owner@example.com";
+        Folder folder = Folder.builder().id(10L).name("not-empty").build();
+        when(folderRepository.findByIdAndOwnerEmail(10L, email)).thenReturn(Optional.of(folder));
+        when(fileRepository.existsByOwnerEmailAndFolderId(email, 10L)).thenReturn(true);
+        FolderService service = new FolderService(folderRepository, fileRepository, mock(UserRepository.class));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> service.delete(email, 10L));
+
+        assertEquals(409, exception.getStatusCode().value());
+        verify(folderRepository, never()).delete(folder);
     }
 }

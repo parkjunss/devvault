@@ -1,5 +1,6 @@
-package org.eardream.devvault.share;
+package org.eardream.devvault.share.repository;
 
+import org.eardream.devvault.share.entity.ShareLink;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 

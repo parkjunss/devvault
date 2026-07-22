@@ -1,8 +1,11 @@
 package org.eardream.devvault.admin;
 
-import org.eardream.devvault.auth.RefreshTokenRepository;
-import org.eardream.devvault.file.StoredFile;
-import org.eardream.devvault.file.StoredFileRepository;
+import org.eardream.devvault.admin.entity.AdminAuditLog;
+import org.eardream.devvault.admin.repository.AdminAuditLogRepository;
+import org.eardream.devvault.admin.service.AdminService;
+import org.eardream.devvault.auth.repository.RefreshTokenRepository;
+import org.eardream.devvault.file.entity.StoredFile;
+import org.eardream.devvault.file.repository.StoredFileRepository;
 import org.eardream.devvault.user.entity.Role;
 import org.eardream.devvault.user.entity.User;
 import org.eardream.devvault.user.entity.UserRole;
@@ -82,6 +85,21 @@ class AdminServiceTest {
         assertEquals(Set.of("ROLE_ADMIN", "ROLE_USER"), result.roles());
         verify(fixture.auditLogs).save(any(AdminAuditLog.class));
         verify(fixture.refreshTokens).deleteAllByUserId(target.getId());
+    }
+
+    @Test
+    void adminIncreasesUserStorageQuotaAndWritesAuditLog() {
+        Fixture fixture = new Fixture();
+        User admin = admin(1L, "admin@example.com");
+        User target = user(2L, "user@example.com");
+        when(fixture.users.findByEmail(admin.getEmail())).thenReturn(Optional.of(admin));
+        when(fixture.users.findById(target.getId())).thenReturn(Optional.of(target));
+
+        AdminService.UserSummary result = fixture.service.increaseStorageQuota(
+                admin.getEmail(), target.getId(), 100_000_000_000L);
+
+        assertEquals(100_000_000_000L, result.storageQuotaBytes());
+        verify(fixture.auditLogs).save(any(AdminAuditLog.class));
     }
 
     @Test

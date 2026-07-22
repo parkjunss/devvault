@@ -1,5 +1,7 @@
-package org.eardream.devvault.admin;
+package org.eardream.devvault.admin.controller;
 
+import lombok.RequiredArgsConstructor;
+import org.eardream.devvault.admin.service.AdminService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -20,12 +22,9 @@ import java.util.Set;
 
 @RestController
 @RequestMapping("/api/admin")
+@RequiredArgsConstructor
 public class AdminController {
     private final AdminService adminService;
-
-    public AdminController(AdminService adminService) {
-        this.adminService = adminService;
-    }
 
     @GetMapping("/dashboard")
     AdminService.DashboardSummary dashboard(@AuthenticationPrincipal Jwt jwt) {
@@ -43,6 +42,12 @@ public class AdminController {
     AdminService.UserSummary updateUser(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
                                         @RequestBody UpdateUserRequest request) {
         return adminService.updateUser(jwt.getSubject(), id, request.enabled(), request.roles());
+    }
+
+    @PatchMapping("/users/{id}/storage-quota")
+    AdminService.UserSummary increaseStorageQuota(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
+                                                  @RequestBody UpdateStorageQuotaRequest request) {
+        return adminService.increaseStorageQuota(jwt.getSubject(), id, request.quotaBytes());
     }
 
     @GetMapping("/files")
@@ -67,5 +72,8 @@ public class AdminController {
     }
 
     public record UpdateUserRequest(Boolean enabled, Set<String> roles) {
+    }
+
+    public record UpdateStorageQuotaRequest(Long quotaBytes) {
     }
 }

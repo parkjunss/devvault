@@ -1,5 +1,13 @@
 package org.eardream.devvault.file;
 
+import org.eardream.devvault.file.controller.FileController;
+import org.eardream.devvault.folder.entity.Folder;
+import org.eardream.devvault.file.entity.StoredFile;
+import org.eardream.devvault.folder.repository.FolderRepository;
+import org.eardream.devvault.file.repository.StoredFileRepository;
+import org.eardream.devvault.file.service.FileStorageService;
+import org.eardream.devvault.fileTag.entity.Tag;
+import org.eardream.devvault.fileTag.controller.TagController;
 import org.eardream.devvault.user.entity.User;
 import org.eardream.devvault.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -38,7 +46,7 @@ class FileStorageServiceTest {
         StoredFileRepository fileRepository = mock(StoredFileRepository.class);
         UserRepository userRepository = mock(UserRepository.class);
         User user = User.builder().id(1L).email("owner@example.com").password("pw").username("owner").build();
-        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailForUpdate(user.getEmail())).thenReturn(Optional.of(user));
         when(fileRepository.saveAndFlush(any(StoredFile.class))).thenAnswer(invocation -> invocation.getArgument(0));
         FileStorageService service = service(fileRepository, userRepository);
 
@@ -49,6 +57,39 @@ class FileStorageServiceTest {
         assertEquals("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824", result.getChecksum());
         assertTrue(Files.isRegularFile(tempDir.resolve(result.getStoredName())));
         assertEquals("hello", Files.readString(tempDir.resolve(result.getStoredName())));
+    }
+
+    @Test
+    void uploadsIntoAnOwnedFolder() {
+        StoredFileRepository fileRepository = mock(StoredFileRepository.class);
+        UserRepository userRepository = mock(UserRepository.class);
+        FolderRepository folderRepository = mock(FolderRepository.class);
+        User user = User.builder().id(1L).email("owner@example.com").password("pw").username("owner").build();
+        Folder folder = Folder.builder().id(10L).name("docs").build();
+        when(userRepository.findByEmailForUpdate(user.getEmail())).thenReturn(Optional.of(user));
+        when(folderRepository.findByIdAndOwnerEmail(10L, user.getEmail())).thenReturn(Optional.of(folder));
+        when(fileRepository.saveAndFlush(any(StoredFile.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        FileStorageService service = new FileStorageService(fileRepository, userRepository, folderRepository, tempDir.toString());
+
+        StoredFile result = service.upload(user.getEmail(),
+                new MockMultipartFile("file", "hello.txt", "text/plain", "hello".getBytes()), 10L);
+
+        assertEquals(folder, result.getFolder());
+    }
+
+    @Test
+    void rejectsUploadOverStorageQuota() {
+        StoredFileRepository fileRepository = mock(StoredFileRepository.class);
+        UserRepository userRepository = mock(UserRepository.class);
+        User user = User.builder().id(1L).email("owner@example.com").password("pw").username("owner")
+                .storageQuotaBytes(4L).build();
+        when(userRepository.findByEmailForUpdate(user.getEmail())).thenReturn(Optional.of(user));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> service(fileRepository, userRepository).upload(user.getEmail(),
+                        new MockMultipartFile("file", "hello.txt", "text/plain", "hello".getBytes())));
+
+        assertEquals(413, exception.getStatusCode().value());
     }
 
     @Test
@@ -69,7 +110,7 @@ class FileStorageServiceTest {
         StoredFileRepository fileRepository = mock(StoredFileRepository.class);
         UserRepository userRepository = mock(UserRepository.class);
         User user = User.builder().id(1L).email("owner@example.com").password("pw").username("owner").build();
-        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailForUpdate(user.getEmail())).thenReturn(Optional.of(user));
         when(fileRepository.saveAndFlush(any(StoredFile.class))).thenThrow(new IllegalStateException("database unavailable"));
         FileStorageService service = service(fileRepository, userRepository);
 
@@ -215,6 +256,20 @@ class FileStorageServiceTest {
     }
 
     @Test
+    void previewsBrowserPlayableMedia() throws Exception {
+        StoredFileRepository fileRepository = mock(StoredFileRepository.class);
+        String email = "owner@example.com";
+        StoredFile file = StoredFile.builder().id(7L).originalName("clip.mp4").storedName("stored")
+                .contentType("video/mp4").size(4).build();
+        when(fileRepository.findByIdAndOwnerEmail(7L, email)).thenReturn(Optional.of(file));
+        Files.writeString(tempDir.resolve("stored"), "data");
+
+        FileStorageService.StoredPreview preview = service(fileRepository, mock(UserRepository.class)).preview(email, 7L);
+
+        assertEquals(MediaType.parseMediaType("video/mp4"), preview.mediaType());
+    }
+
+    @Test
     void rejectsUnsupportedPreviewType() throws Exception {
         StoredFileRepository fileRepository = mock(StoredFileRepository.class);
         String email = "owner@example.com";
@@ -312,7 +367,7 @@ class FileStorageServiceTest {
         UserRepository userRepository = mock(UserRepository.class);
         User user = User.builder().id(1L).email("owner@example.com").password("pw").username("owner").build();
         String checksum = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824";
-        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailForUpdate(user.getEmail())).thenReturn(Optional.of(user));
         when(fileRepository.findFirstByOwnerEmailAndChecksum(user.getEmail(), checksum))
                 .thenReturn(Optional.of(StoredFile.builder().id(9L).checksum(checksum).build()));
         FileStorageService service = service(fileRepository, userRepository);
@@ -332,7 +387,7 @@ class FileStorageServiceTest {
         StoredFileRepository fileRepository = mock(StoredFileRepository.class);
         UserRepository userRepository = mock(UserRepository.class);
         User user = User.builder().id(1L).email("owner@example.com").password("pw").username("owner").build();
-        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailForUpdate(user.getEmail())).thenReturn(Optional.of(user));
         when(fileRepository.saveAndFlush(any(StoredFile.class)))
                 .thenThrow(new DataIntegrityViolationException("duplicate checksum"));
         FileStorageService service = service(fileRepository, userRepository);
@@ -350,16 +405,21 @@ class FileStorageServiceTest {
     @Test
     void returnsActiveFileCountAndUsedBytesForDashboard() {
         StoredFileRepository fileRepository = mock(StoredFileRepository.class);
+        UserRepository userRepository = mock(UserRepository.class);
         StoredFileRepository.UsageSummary usage = mock(StoredFileRepository.UsageSummary.class);
         when(usage.getFileCount()).thenReturn(3L);
         when(usage.getUsedBytes()).thenReturn(8192L);
         when(fileRepository.summarizeActiveUsage("owner@example.com")).thenReturn(usage);
-        FileStorageService service = service(fileRepository, mock(UserRepository.class));
+        when(fileRepository.sumStoredBytes("owner@example.com")).thenReturn(8192L);
+        when(userRepository.findByEmail("owner@example.com")).thenReturn(Optional.of(
+                User.builder().email("owner@example.com").password("pw").username("owner").build()));
+        FileStorageService service = service(fileRepository, userRepository);
 
         FileStorageService.DashboardSummary result = service.dashboard("owner@example.com");
 
         assertEquals(3L, result.fileCount());
         assertEquals(8192L, result.usedBytes());
+        assertEquals(50_000_000_000L, result.quotaBytes());
     }
 
     private FileStorageService service(StoredFileRepository fileRepository, UserRepository userRepository) {

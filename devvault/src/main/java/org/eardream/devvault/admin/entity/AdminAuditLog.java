@@ -1,4 +1,4 @@
-package org.eardream.devvault.admin;
+package org.eardream.devvault.admin.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

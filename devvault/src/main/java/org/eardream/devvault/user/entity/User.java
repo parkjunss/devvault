@@ -18,6 +18,7 @@ import java.time.Instant;
 @AllArgsConstructor
 @Builder
 public class User implements UserDetails {
+    public static final long DEFAULT_STORAGE_QUOTA_BYTES = 50_000_000_000L;
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -31,11 +32,18 @@ public class User implements UserDetails {
     @Column(nullable = false, length = 50)
     private String username;
 
+    @Column(name = "user_image")
+    private String userImage;
+
     @Column(name = "terms_accepted_at")
     private Instant termsAcceptedAt;
 
     @Column(name = "privacy_accepted_at")
     private Instant privacyAcceptedAt;
+
+    @Column(name = "storage_quota_bytes")
+    @Builder.Default
+    private Long storageQuotaBytes = DEFAULT_STORAGE_QUOTA_BYTES;
 
     @Column(nullable = false, columnDefinition = "boolean default true")
     @Builder.Default
@@ -77,5 +85,25 @@ public class User implements UserDetails {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public void updatePassword(String password) {
+        this.password = password;
+    }
+
+    public void updateUsername(String username) {
+        this.username = username;
+    }
+
+    public void updateUserImage(String userImage) {
+        this.userImage = userImage;
+    }
+
+    public long getStorageQuotaBytes() {
+        return storageQuotaBytes == null ? DEFAULT_STORAGE_QUOTA_BYTES : storageQuotaBytes;
+    }
+
+    public void increaseStorageQuota(long storageQuotaBytes) {
+        this.storageQuotaBytes = storageQuotaBytes;
     }
 }

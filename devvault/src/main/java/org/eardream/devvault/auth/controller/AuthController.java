@@ -1,4 +1,4 @@
-package org.eardream.devvault.auth;
+package org.eardream.devvault.auth.controller;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
@@ -6,6 +6,8 @@ import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
+import org.eardream.devvault.auth.dto.AuthToken;
+import org.eardream.devvault.auth.service.AuthService;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

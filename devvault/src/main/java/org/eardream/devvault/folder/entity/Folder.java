@@ -1,4 +1,4 @@
-package org.eardream.devvault.file.entity;
+package org.eardream.devvault.folder.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

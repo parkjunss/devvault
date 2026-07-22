@@ -1,5 +1,9 @@
-package org.eardream.devvault.file;
+package org.eardream.devvault.file.controller;
 
+import org.eardream.devvault.file.service.FileStorageService;
+import org.eardream.devvault.file.entity.StoredFile;
+import org.eardream.devvault.fileTag.entity.Tag;
+import org.eardream.devvault.fileTag.controller.TagController;
 import tools.jackson.databind.JsonNode;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.data.domain.Page;
@@ -44,8 +48,9 @@ public class FileController {
 
     @PostMapping
     ResponseEntity<FileResponse> upload(@AuthenticationPrincipal Jwt jwt,
-                                        @RequestParam("file") MultipartFile file) {
-        StoredFile storedFile = fileStorageService.upload(jwt.getSubject(), file);
+                                        @RequestParam("file") MultipartFile file,
+                                        @RequestParam(required = false) Long folderId) {
+        StoredFile storedFile = fileStorageService.upload(jwt.getSubject(), file, folderId);
         return ResponseEntity.status(HttpStatus.CREATED).body(FileResponse.from(storedFile));
     }
 
@@ -90,7 +95,10 @@ public class FileController {
         return ResponseEntity.ok()
                 .contentType(mediaType)
                 .contentLength(metadata.getSize())
+                .cacheControl(CacheControl.noStore())
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .header("X-Content-Type-Options", "nosniff")
+                .header("Content-Security-Policy", "sandbox; default-src 'none'")
                 .body(new InputStreamResource(Files.newInputStream(download.path())));
     }
 
@@ -171,7 +179,7 @@ public class FileController {
 
     public record FileResponse(Long id, String originalName, Long folderId, String contentType, long size,
                                String checksum, boolean favorite, Instant createdAt) {
-        static FileResponse from(StoredFile file) {
+        public static FileResponse from(StoredFile file) {
             return new FileResponse(file.getId(), file.getOriginalName(),
                     file.getFolder() == null ? null : file.getFolder().getId(), file.getContentType(),
                     file.getSize(), file.getChecksum(), file.isFavorite(), file.getCreatedAt());
@@ -181,7 +189,7 @@ public class FileController {
     public record FileDetailResponse(Long id, String originalName, Long folderId, String contentType, long size,
                                      String checksum, boolean favorite, Instant createdAt,
                                      List<TagController.TagResponse> tags) {
-        static FileDetailResponse from(StoredFile file) {
+        public static FileDetailResponse from(StoredFile file) {
             List<TagController.TagResponse> tags = file.getTags().stream()
                     .sorted(Comparator.comparing(Tag::getName, String.CASE_INSENSITIVE_ORDER))
                     .map(TagController.TagResponse::from)

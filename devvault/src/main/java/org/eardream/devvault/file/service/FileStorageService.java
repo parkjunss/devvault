@@ -1,7 +1,9 @@
-package org.eardream.devvault.file;
+package org.eardream.devvault.file.service;
 
-import org.eardream.devvault.file.entity.Folder;
-import org.eardream.devvault.file.repository.FolderRepository;
+import org.eardream.devvault.file.entity.StoredFile;
+import org.eardream.devvault.file.repository.StoredFileRepository;
+import org.eardream.devvault.folder.entity.Folder;
+import org.eardream.devvault.folder.repository.FolderRepository;
 import org.eardream.devvault.user.entity.User;
 import org.eardream.devvault.user.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -58,9 +60,20 @@ public class FileStorageService {
 
     @Transactional
     public StoredFile upload(String ownerEmail, MultipartFile multipartFile) {
+        return upload(ownerEmail, multipartFile, null);
+    }
+
+    @Transactional
+    public StoredFile upload(String ownerEmail, MultipartFile multipartFile, Long folderId) {
         String originalName = validateOriginalName(multipartFile);
-        User owner = userRepository.findByEmail(ownerEmail)
+        User owner = userRepository.findByEmailForUpdate(ownerEmail)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+        long usedBytes = storedFileRepository.sumStoredBytes(ownerEmail);
+        if (multipartFile.getSize() > owner.getStorageQuotaBytes() - usedBytes) {
+            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,
+                    "저장소 용량이 부족합니다. 요금제를 업그레이드해 주세요.");
+        }
+        Folder folder = folderId == null ? null : findOwnedFolder(ownerEmail, folderId);
         String storedName = UUID.randomUUID().toString();
         Path finalPath = resolveStoredPath(storedName);
         Path tempPath = null;
@@ -81,6 +94,7 @@ public class FileStorageService {
 
             StoredFile storedFile = StoredFile.builder()
                     .owner(owner)
+                    .folder(folder)
                     .originalName(originalName)
                     .storedName(storedName)
                     .contentType(multipartFile.getContentType())
@@ -138,7 +152,10 @@ public class FileStorageService {
     @Transactional(readOnly = true)
     public DashboardSummary dashboard(String ownerEmail) {
         StoredFileRepository.UsageSummary usage = storedFileRepository.summarizeActiveUsage(ownerEmail);
-        return new DashboardSummary(usage.getFileCount(), usage.getUsedBytes());
+        User owner = userRepository.findByEmail(ownerEmail)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+        return new DashboardSummary(usage.getFileCount(), storedFileRepository.sumStoredBytes(ownerEmail),
+                owner.getStorageQuotaBytes());
     }
 
     @Transactional(readOnly = true)
@@ -162,8 +179,7 @@ public class FileStorageService {
             storedFile.rename(validateFileName(requestedName));
         }
         if (folderChanged) {
-            Folder folder = folderId == null ? null : folderRepository.findByIdAndOwnerEmail(folderId, ownerEmail)
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "폴더를 찾을 수 없습니다."));
+            Folder folder = folderId == null ? null : findOwnedFolder(ownerEmail, folderId);
             storedFile.moveTo(folder);
         }
         return storedFile;
@@ -225,6 +241,14 @@ public class FileStorageService {
                 .orElseThrow(FileStorageService::notFound);
     }
 
+    private Folder findOwnedFolder(String ownerEmail, Long folderId) {
+        if (folderId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "folderId는 양의 정수여야 합니다.");
+        }
+        return folderRepository.findByIdAndOwnerEmail(folderId, ownerEmail)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "폴더를 찾을 수 없습니다."));
+    }
+
     private static MediaType previewMediaType(StoredFile file) {
         String contentType = file.getContentType() == null
                 ? "" : file.getContentType().toLowerCase(Locale.ROOT);
@@ -233,6 +257,9 @@ public class FileStorageService {
         }
         if (MediaType.APPLICATION_PDF_VALUE.equals(contentType)) {
             return MediaType.APPLICATION_PDF;
+        }
+        if (contentType.startsWith("audio/") || contentType.startsWith("video/")) {
+            return MediaType.parseMediaType(contentType);
         }
         if (contentType.startsWith("text/") || CODE_EXTENSIONS.contains(extensionOf(file.getOriginalName()))) {
             return MediaType.TEXT_PLAIN;
@@ -328,6 +355,6 @@ public class FileStorageService {
     public record StoredPreview(StoredFile metadata, Path path, MediaType mediaType) {
     }
 
-    public record DashboardSummary(long fileCount, long usedBytes) {
+    public record DashboardSummary(long fileCount, long usedBytes, long quotaBytes) {
     }
 }

@@ -1,7 +1,10 @@
-package org.eardream.devvault.file;
+package org.eardream.devvault.folder.service;
 
-import org.eardream.devvault.file.entity.Folder;
-import org.eardream.devvault.file.repository.FolderRepository;
+import lombok.RequiredArgsConstructor;
+import org.eardream.devvault.folder.entity.Folder;
+import org.eardream.devvault.file.entity.StoredFile;
+import org.eardream.devvault.folder.repository.FolderRepository;
+import org.eardream.devvault.file.repository.StoredFileRepository;
 import org.eardream.devvault.user.entity.User;
 import org.eardream.devvault.user.repository.UserRepository;
 import org.springframework.data.domain.Page;
@@ -17,18 +20,11 @@ import java.util.List;
 import java.util.Set;
 
 @Service
+@RequiredArgsConstructor
 public class FolderService {
     private final FolderRepository folderRepository;
     private final StoredFileRepository fileRepository;
     private final UserRepository userRepository;
-
-    public FolderService(FolderRepository folderRepository,
-                         StoredFileRepository fileRepository,
-                         UserRepository userRepository) {
-        this.folderRepository = folderRepository;
-        this.fileRepository = fileRepository;
-        this.userRepository = userRepository;
-    }
 
     @Transactional
     public Folder create(String ownerEmail, String requestedName, Long parentId) {
@@ -65,6 +61,16 @@ public class FolderService {
             folder.moveTo(parent);
         }
         return folder;
+    }
+
+    @Transactional
+    public void delete(String ownerEmail, Long folderId) {
+        Folder folder = findOwned(folderId, ownerEmail);
+        if (folderRepository.existsByOwnerEmailAndParentId(ownerEmail, folderId)
+                || fileRepository.existsByOwnerEmailAndFolderId(ownerEmail, folderId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "비어 있는 폴더만 삭제할 수 있습니다.");
+        }
+        folderRepository.delete(folder);
     }
 
     @Transactional(readOnly = true)

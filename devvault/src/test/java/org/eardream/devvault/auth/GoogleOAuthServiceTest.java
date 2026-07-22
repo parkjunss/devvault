@@ -1,5 +1,6 @@
 package org.eardream.devvault.auth;
 
+import org.eardream.devvault.auth.service.GoogleOAuthService;
 import org.eardream.devvault.user.entity.OauthAccount;
 import org.eardream.devvault.user.entity.Role;
 import org.eardream.devvault.user.entity.User;
@@ -23,6 +24,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -37,7 +39,8 @@ class GoogleOAuthServiceTest {
     @Mock RoleRepository roleRepository;
     @Mock UserRoleRepository userRoleRepository;
     @Mock PasswordEncoder passwordEncoder;
-    @InjectMocks GoogleOAuthService googleOAuthService;
+    @InjectMocks
+    GoogleOAuthService googleOAuthService;
 
     @Test
     void createsUserAndLinksNewGoogleAccount() {
@@ -54,6 +57,10 @@ class GoogleOAuthServiceTest {
         User user = googleOAuthService.login(principal);
 
         assertEquals(savedUser, user);
+        ArgumentCaptor<User> createdUser = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(createdUser.capture());
+        assertNotNull(createdUser.getValue().getTermsAcceptedAt());
+        assertNotNull(createdUser.getValue().getPrivacyAcceptedAt());
         ArgumentCaptor<OauthAccount> account = ArgumentCaptor.forClass(OauthAccount.class);
         verify(oauthAccountRepository).save(account.capture());
         assertEquals(7L, account.getValue().getUserId());

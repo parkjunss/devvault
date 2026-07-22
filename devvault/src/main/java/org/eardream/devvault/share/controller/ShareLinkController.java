@@ -1,7 +1,8 @@
-package org.eardream.devvault.share;
+package org.eardream.devvault.share.controller;
 
-import org.eardream.devvault.file.FileStorageService;
-import org.eardream.devvault.file.StoredFile;
+import org.eardream.devvault.file.service.FileStorageService;
+import org.eardream.devvault.file.entity.StoredFile;
+import org.eardream.devvault.share.service.ShareLinkService;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ContentDisposition;
@@ -56,6 +57,7 @@ public class ShareLinkController {
                 .cacheControl(CacheControl.noStore())
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
                 .header("X-Content-Type-Options", "nosniff")
+                .header("Content-Security-Policy", "sandbox; default-src 'none'")
                 .body(new InputStreamResource(Files.newInputStream(download.path())));
     }
 

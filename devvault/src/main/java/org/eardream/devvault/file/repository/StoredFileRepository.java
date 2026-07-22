@@ -1,5 +1,6 @@
-package org.eardream.devvault.file;
+package org.eardream.devvault.file.repository;
 
+import org.eardream.devvault.file.entity.StoredFile;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -13,6 +14,8 @@ public interface StoredFileRepository extends JpaRepository<StoredFile, Long> {
     Page<StoredFile> findAllByOwnerEmailAndDeletedAtIsNull(String email, Pageable pageable);
 
     Page<StoredFile> findAllByOwnerEmailAndFolderIdAndDeletedAtIsNull(String email, Long folderId, Pageable pageable);
+
+    boolean existsByOwnerEmailAndFolderId(String email, Long folderId);
 
     Page<StoredFile> findAllByOwnerEmailAndDeletedAtIsNotNull(String email, Pageable pageable);
 
@@ -51,6 +54,9 @@ public interface StoredFileRepository extends JpaRepository<StoredFile, Long> {
               and file.deletedAt is null
             """)
     UsageSummary summarizeActiveUsage(@Param("ownerEmail") String ownerEmail);
+
+    @Query("select coalesce(sum(file.size), 0) from StoredFile file where file.owner.email = :ownerEmail")
+    long sumStoredBytes(@Param("ownerEmail") String ownerEmail);
 
     @Query("""
             select count(file) as fileCount, coalesce(sum(file.size), 0) as usedBytes

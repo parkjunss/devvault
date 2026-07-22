@@ -1,7 +1,10 @@
 package org.eardream.devvault.share;
 
-import org.eardream.devvault.file.FileStorageService;
-import org.eardream.devvault.file.StoredFile;
+import org.eardream.devvault.file.service.FileStorageService;
+import org.eardream.devvault.file.entity.StoredFile;
+import org.eardream.devvault.share.entity.ShareLink;
+import org.eardream.devvault.share.repository.ShareLinkRepository;
+import org.eardream.devvault.share.service.ShareLinkService;
 import org.eardream.devvault.user.entity.User;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;

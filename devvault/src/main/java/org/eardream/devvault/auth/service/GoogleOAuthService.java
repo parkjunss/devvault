@@ -1,4 +1,4 @@
-package org.eardream.devvault.auth;
+package org.eardream.devvault.auth.service;
 
 import lombok.RequiredArgsConstructor;
 import org.eardream.devvault.user.entity.OauthAccount;
@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Locale;
 import java.util.UUID;
+import java.time.Instant;
 
 @Service
 @RequiredArgsConstructor
@@ -70,10 +71,13 @@ public class GoogleOAuthService {
             name = name.substring(0, 50);
         }
 
+        Instant acceptedAt = Instant.now();
         User user = userRepository.save(User.builder()
                 .email(email)
                 .password(passwordEncoder.encode(UUID.randomUUID().toString()))
                 .username(name)
+                .termsAcceptedAt(acceptedAt)
+                .privacyAcceptedAt(acceptedAt)
                 .build());
         Role role = roleRepository.findByRole("ROLE_USER")
                 .orElseThrow(() -> new IllegalStateException("ROLE_USER가 초기화되지 않았습니다."));

@@ -1,5 +1,10 @@
 package org.eardream.devvault.auth;
 
+import org.eardream.devvault.auth.controller.AuthController;
+import org.eardream.devvault.auth.dto.AuthToken;
+import org.eardream.devvault.auth.service.AuthService;
+import org.eardream.devvault.auth.service.JwtService;
+import org.eardream.devvault.auth.service.RefreshTokenService;
 import org.eardream.devvault.user.entity.Role;
 import org.eardream.devvault.user.entity.User;
 import org.eardream.devvault.user.repository.RoleRepository;
@@ -34,9 +39,12 @@ class AuthServiceTest {
     @Mock UserRoleRepository userRoleRepository;
     @Mock PasswordEncoder passwordEncoder;
     @Mock AuthenticationManager authenticationManager;
-    @Mock JwtService jwtService;
-    @Mock RefreshTokenService refreshTokenService;
-    @InjectMocks AuthService authService;
+    @Mock
+    JwtService jwtService;
+    @Mock
+    RefreshTokenService refreshTokenService;
+    @InjectMocks
+    AuthService authService;
 
     @Test
     void signupCreatesUserWithDefaultRoleAndToken() {

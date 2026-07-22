@@ -1,4 +1,4 @@
-package org.eardream.devvault.auth;
+package org.eardream.devvault.auth.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

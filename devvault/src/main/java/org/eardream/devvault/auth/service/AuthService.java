@@ -1,6 +1,7 @@
-package org.eardream.devvault.auth;
+package org.eardream.devvault.auth.service;
 
 import lombok.RequiredArgsConstructor;
+import org.eardream.devvault.auth.dto.AuthToken;
 import org.eardream.devvault.user.entity.Role;
 import org.eardream.devvault.user.entity.User;
 import org.eardream.devvault.user.entity.UserRole;
@@ -68,7 +69,7 @@ public class AuthService {
         refreshTokenService.revoke(refreshToken);
     }
 
-    AuthToken createTokens(User user) {
+    public AuthToken createTokens(User user) {
         if (!user.isEnabled()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "비활성화된 사용자입니다.");
         }

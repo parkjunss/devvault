@@ -1,7 +1,7 @@
-package org.eardream.devvault.share;
+package org.eardream.devvault.share.service;
 
-import org.eardream.devvault.file.FileStorageService;
-import org.eardream.devvault.file.StoredFile;
+import org.eardream.devvault.file.service.FileStorageService;
+import org.eardream.devvault.file.entity.StoredFile;
 import org.eardream.devvault.share.entity.ShareLink;
 import org.eardream.devvault.share.repository.ShareLinkRepository;
 import org.springframework.http.HttpStatus;
@@ -61,7 +61,7 @@ public class ShareLinkService {
         return fileStorageService.download(file.getOwner().getEmail(), file.getId());
     }
 
-    static String hash(String token) {
+    public static String hash(String token) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                     .digest(token.getBytes(StandardCharsets.UTF_8)));

@@ -1,5 +1,6 @@
-package org.eardream.devvault.file;
+package org.eardream.devvault.file.controller;
 
+import org.eardream.devvault.file.service.FileStorageService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;

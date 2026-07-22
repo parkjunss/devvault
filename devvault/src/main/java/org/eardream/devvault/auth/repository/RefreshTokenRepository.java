@@ -1,6 +1,7 @@
-package org.eardream.devvault.auth;
+package org.eardream.devvault.auth.repository;
 
 import jakarta.persistence.LockModeType;
+import org.eardream.devvault.auth.entity.RefreshToken;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;

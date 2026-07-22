@@ -1,11 +1,12 @@
 package org.eardream.devvault.auth;
 
-import tools.jackson.databind.ObjectMapper;
+import org.eardream.devvault.auth.dto.AuthToken;
+import org.eardream.devvault.auth.service.AuthService;
+import org.eardream.devvault.auth.service.GoogleOAuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
 import org.eardream.devvault.user.entity.User;
-import org.springframework.http.MediaType;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
@@ -15,16 +16,23 @@ import org.springframework.security.web.authentication.AuthenticationSuccessHand
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
 
 @Component
-@RequiredArgsConstructor
 public class OAuth2LoginHandler implements AuthenticationSuccessHandler, AuthenticationFailureHandler {
 
     private final GoogleOAuthService googleOAuthService;
     private final AuthService authService;
-    private final ObjectMapper objectMapper;
+
+    private final String frontendUrl;
+
+    public OAuth2LoginHandler(GoogleOAuthService googleOAuthService, AuthService authService,
+                              @Value("${app.frontend-url}") String frontendUrl) {
+        this.googleOAuthService = googleOAuthService;
+        this.authService = authService;
+        this.frontendUrl = frontendUrl;
+    }
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response,
@@ -32,7 +40,9 @@ public class OAuth2LoginHandler implements AuthenticationSuccessHandler, Authent
         try {
             OAuth2AuthenticationToken token = (OAuth2AuthenticationToken) authentication;
             User user = googleOAuthService.login(token.getPrincipal());
-            writeJson(response, HttpServletResponse.SC_OK, authService.createTokens(user));
+            AuthToken tokens = authService.createTokens(user);
+            redirect(response, "#accessToken=" + encode(tokens.accessToken())
+                    + "&refreshToken=" + encode(tokens.refreshToken()));
         } catch (OAuth2AuthenticationException exception) {
             onAuthenticationFailure(request, response, exception);
         }
@@ -41,14 +51,17 @@ public class OAuth2LoginHandler implements AuthenticationSuccessHandler, Authent
     @Override
     public void onAuthenticationFailure(HttpServletRequest request, HttpServletResponse response,
                                         AuthenticationException exception) throws IOException {
-        writeJson(response, HttpServletResponse.SC_UNAUTHORIZED,
-                Map.of("message", "Google 로그인에 실패했습니다."));
+        redirect(response, "?oauthError=1");
     }
 
-    private void writeJson(HttpServletResponse response, int status, Object body) throws IOException {
-        response.setStatus(status);
-        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        objectMapper.writeValue(response.getWriter(), body);
+    private void redirect(HttpServletResponse response, String fragment) throws IOException {
+        String base = frontendUrl.endsWith("/")
+                ? frontendUrl.substring(0, frontendUrl.length() - 1)
+                : frontendUrl;
+        response.sendRedirect(base + "/login" + fragment);
+    }
+
+    private static String encode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 }

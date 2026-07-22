@@ -1,9 +1,11 @@
-package org.eardream.devvault.admin;
+package org.eardream.devvault.admin.service;
 
 import lombok.RequiredArgsConstructor;
-import org.eardream.devvault.auth.RefreshTokenRepository;
-import org.eardream.devvault.file.StoredFile;
-import org.eardream.devvault.file.StoredFileRepository;
+import org.eardream.devvault.admin.entity.AdminAuditLog;
+import org.eardream.devvault.admin.repository.AdminAuditLogRepository;
+import org.eardream.devvault.auth.repository.RefreshTokenRepository;
+import org.eardream.devvault.file.entity.StoredFile;
+import org.eardream.devvault.file.repository.StoredFileRepository;
 import org.eardream.devvault.user.entity.Role;
 import org.eardream.devvault.user.entity.User;
 import org.eardream.devvault.user.entity.UserRole;
@@ -111,6 +113,19 @@ public class AdminService {
         return toUserSummary(target);
     }
 
+    @Transactional
+    public UserSummary increaseStorageQuota(String adminEmail, Long userId, Long quotaBytes) {
+        User admin = currentAdmin(adminEmail);
+        User target = userRepository.findById(userId).orElseThrow(AdminService::userNotFound);
+        long currentQuota = target.getStorageQuotaBytes();
+        if (quotaBytes == null || quotaBytes <= currentQuota) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "저장소 한도는 현재 값보다 크게 지정해야 합니다.");
+        }
+        target.increaseStorageQuota(quotaBytes);
+        audit(admin, "INCREASE_STORAGE_QUOTA", "USER", target.getId(), currentQuota + " -> " + quotaBytes);
+        return toUserSummary(target);
+    }
+
     @Transactional(readOnly = true)
     public Page<FileSummary> files(String adminEmail, String query, Pageable pageable) {
         currentAdmin(adminEmail);
@@ -182,7 +197,8 @@ public class AdminService {
     }
 
     private static UserSummary toUserSummary(User user) {
-        return new UserSummary(user.getId(), user.getEmail(), user.getUsername(), user.isEnabled(), rolesOf(user));
+        return new UserSummary(user.getId(), user.getEmail(), user.getUsername(), user.isEnabled(),
+                rolesOf(user), user.getStorageQuotaBytes());
     }
 
     private static FileSummary toFileSummary(StoredFile file) {
@@ -207,7 +223,8 @@ public class AdminService {
                                    String serviceStatus) {
     }
 
-    public record UserSummary(Long id, String email, String username, boolean enabled, Set<String> roles) {
+    public record UserSummary(Long id, String email, String username, boolean enabled, Set<String> roles,
+                              long storageQuotaBytes) {
     }
 
     public record FileSummary(Long id, String ownerEmail, String originalName, String contentType, long size,

@@ -1,4 +1,4 @@
-package org.eardream.devvault.file;
+package org.eardream.devvault.file.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -17,8 +17,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.eardream.devvault.file.entity.Folder;
 import org.eardream.devvault.fileTag.entity.Tag;
+import org.eardream.devvault.folder.entity.Folder;
 import org.eardream.devvault.user.entity.User;
 
 import java.time.Instant;
@@ -79,11 +79,11 @@ public class StoredFile {
     @Builder.Default
     private Set<Tag> tags = new HashSet<>();
 
-    void rename(String name) {
+    public void rename(String name) {
         this.originalName = name;
     }
 
-    void moveTo(Folder folder) {
+    public void moveTo(Folder folder) {
         this.folder = folder;
     }
 
@@ -101,11 +101,11 @@ public class StoredFile {
         }
     }
 
-    void restore() {
+    public void restore() {
         deletedAt = null;
     }
 
-    void setFavorite(boolean favorite) {
+    public void setFavorite(boolean favorite) {
         this.favorite = favorite;
     }
 

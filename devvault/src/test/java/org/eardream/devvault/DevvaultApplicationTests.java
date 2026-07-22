@@ -1,6 +1,6 @@
 package org.eardream.devvault;
 
-import org.eardream.devvault.file.StoredFileRepository;
+import org.eardream.devvault.file.repository.StoredFileRepository;
 import org.eardream.devvault.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

@@ -1,5 +1,9 @@
-package org.eardream.devvault.file;
+package org.eardream.devvault.fileTag.service;
 
+import org.eardream.devvault.file.entity.StoredFile;
+import org.eardream.devvault.file.repository.StoredFileRepository;
+import org.eardream.devvault.fileTag.entity.Tag;
+import org.eardream.devvault.fileTag.repository.TagRepository;
 import org.eardream.devvault.user.entity.User;
 import org.eardream.devvault.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;

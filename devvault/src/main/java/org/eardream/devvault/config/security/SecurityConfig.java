@@ -1,4 +1,4 @@
-package org.eardream.devvault.config;
+package org.eardream.devvault.config.security;
 
 import org.eardream.devvault.auth.OAuth2LoginHandler;
 import org.eardream.devvault.user.repository.UserRepository;
