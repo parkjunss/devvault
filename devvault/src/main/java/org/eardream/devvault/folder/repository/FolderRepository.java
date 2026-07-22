@@ -1,5 +1,6 @@
-package org.eardream.devvault.file;
+package org.eardream.devvault.file.repository;
 
+import org.eardream.devvault.file.entity.Folder;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

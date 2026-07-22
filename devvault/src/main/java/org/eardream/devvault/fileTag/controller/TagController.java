@@ -63,7 +63,7 @@ public class TagController {
     }
 
     public record TagResponse(Long id, String name) {
-        static TagResponse from(Tag tag) {
+        public static TagResponse from(Tag tag) {
             return new TagResponse(tag.getId(), tag.getName());
         }
     }

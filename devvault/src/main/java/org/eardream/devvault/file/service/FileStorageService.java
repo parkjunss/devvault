@@ -1,5 +1,7 @@
 package org.eardream.devvault.file;
 
+import org.eardream.devvault.file.entity.Folder;
+import org.eardream.devvault.file.repository.FolderRepository;
 import org.eardream.devvault.user.entity.User;
 import org.eardream.devvault.user.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;

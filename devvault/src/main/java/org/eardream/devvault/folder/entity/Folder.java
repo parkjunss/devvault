@@ -1,4 +1,4 @@
-package org.eardream.devvault.file;
+package org.eardream.devvault.file.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -46,11 +46,11 @@ public class Folder {
     @Builder.Default
     private Instant createdAt = Instant.now();
 
-    void rename(String name) {
+    public void rename(String name) {
         this.name = name;
     }
 
-    void moveTo(Folder parent) {
+    public void moveTo(Folder parent) {
         this.parent = parent;
     }
 }

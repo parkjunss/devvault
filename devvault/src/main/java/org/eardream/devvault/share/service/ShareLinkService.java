@@ -2,6 +2,8 @@ package org.eardream.devvault.share;
 
 import org.eardream.devvault.file.FileStorageService;
 import org.eardream.devvault.file.StoredFile;
+import org.eardream.devvault.share.entity.ShareLink;
+import org.eardream.devvault.share.repository.ShareLinkRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

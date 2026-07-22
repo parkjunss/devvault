@@ -17,6 +17,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.eardream.devvault.file.entity.Folder;
+import org.eardream.devvault.fileTag.entity.Tag;
 import org.eardream.devvault.user.entity.User;
 
 import java.time.Instant;
@@ -85,11 +87,11 @@ public class StoredFile {
         this.folder = folder;
     }
 
-    void attachTag(Tag tag) {
+    public void attachTag(Tag tag) {
         tags.add(tag);
     }
 
-    void detachTag(Tag tag) {
+    public void detachTag(Tag tag) {
         tags.remove(tag);
     }
 
@@ -107,7 +109,7 @@ public class StoredFile {
         this.favorite = favorite;
     }
 
-    boolean isDeleted() {
+    public boolean isDeleted() {
         return deletedAt != null;
     }
 }
