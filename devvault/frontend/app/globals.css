@@ -173,7 +173,17 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .previewFrame audio { width: calc(100% - 32px); }
 .videoPlayer { position: relative; width: 100%; align-self: stretch; display: flex; align-items: center; background: #000; overflow: hidden; }
 .videoPlayer video { display: block; width: 100%; max-height: 520px; background: #000; cursor: pointer; }
-.videoPlayer video::cue { color: #fff; background: rgba(0, 0, 0, .72); font-size: 1.05rem; }
+.videoPlayer video::cue { color: #fff; }
+.videoPlayer.subtitleSizeSmall video::cue { font-size: .85rem; }
+.videoPlayer.subtitleSizeMedium video::cue { font-size: 1.05rem; }
+.videoPlayer.subtitleSizeLarge video::cue { font-size: 1.3rem; }
+.videoPlayer.subtitleSizeExtraLarge video::cue { font-size: 1.6rem; }
+.videoPlayer.subtitleBgNone video::cue { background: transparent; text-shadow: 0 1px 3px #000, 0 0 5px #000; }
+.videoPlayer.subtitleBgSoft video::cue { background: rgba(0, 0, 0, .4); }
+.videoPlayer.subtitleBgDark video::cue { background: rgba(0, 0, 0, .78); }
+.subtitleSettings { position: absolute; right: 12px; bottom: 56px; z-index: 2; padding: 10px; border: 1px solid rgba(255, 255, 255, .2); border-radius: 7px; display: flex; gap: 8px; color: #fff; background: rgba(13, 18, 17, .94); box-shadow: 0 8px 24px rgba(0, 0, 0, .3); }
+.subtitleSettings label { display: grid; gap: 4px; font-size: 10px; }
+.subtitleSettings select { min-width: 86px; height: 30px; border: 1px solid #4c5754; border-radius: 5px; padding: 0 7px; color: #fff; background: #202826; }
 .videoControls { position: absolute; right: 0; bottom: 0; left: 0; padding: 24px 12px 10px; color: #fff; background: linear-gradient(transparent, rgba(0, 0, 0, .86)); }
 .videoSeek { display: block; width: 100%; height: 4px; margin: 0 0 9px; accent-color: var(--accent); cursor: pointer; }
 .videoControlRow { display: flex; align-items: center; gap: 8px; min-width: 0; }

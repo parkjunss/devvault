@@ -10,6 +10,10 @@ assert.doesNotMatch(source, /<video key=/);
 assert.match(playerSource, /accept="\.vtt,\.srt,\.smi,\.sami/);
 assert.match(playerSource, /event\.currentTarget\.track\.mode = "showing"/);
 assert.match(playerSource, /for \(const track of Array\.from\(video\.textTracks\)\)/);
+assert.match(playerSource, /aria-label="자막 크기"/);
+assert.match(playerSource, /aria-label="자막 배경"/);
+assert.match(playerSource, /subtitleSizeLarge/);
+assert.match(playerSource, /subtitleBgNone/);
 assert.match(source, /async function attachTag/);
 assert.match(source, /\/api\/files\/\$\{selected\.id\}\/tags/);
 

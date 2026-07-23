@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  ArrowsOut, ClosedCaptioning, Pause, Play, SpeakerHigh, SpeakerSlash
+  ArrowsOut, ClosedCaptioning, Pause, Play, SlidersHorizontal, SpeakerHigh, SpeakerSlash
 } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 
@@ -12,6 +12,9 @@ type VideoPlayerProps = {
   onSubtitleFile: (file: File) => Promise<void>;
   onRemoveSubtitle: () => void;
 };
+
+type SubtitleSize = "subtitleSizeSmall" | "subtitleSizeMedium" | "subtitleSizeLarge" | "subtitleSizeExtraLarge";
+type SubtitleBackground = "subtitleBgNone" | "subtitleBgSoft" | "subtitleBgDark";
 
 function formatTime(seconds: number) {
   if (!Number.isFinite(seconds)) return "00:00";
@@ -40,6 +43,9 @@ export function VideoPlayer({
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
+  const [subtitleSettingsOpen, setSubtitleSettingsOpen] = useState(false);
+  const [subtitleSize, setSubtitleSize] = useState<SubtitleSize>("subtitleSizeLarge");
+  const [subtitleBackground, setSubtitleBackground] = useState<SubtitleBackground>("subtitleBgDark");
 
   useEffect(() => {
     const video = videoRef.current;
@@ -98,7 +104,7 @@ export function VideoPlayer({
   }
 
   return (
-    <div className="videoPlayer" ref={playerRef}>
+    <div className={`videoPlayer ${subtitleSize} ${subtitleBackground}`} ref={playerRef}>
       <video
         ref={videoRef}
         preload="metadata"
@@ -129,6 +135,33 @@ export function VideoPlayer({
           />
         )}
       </video>
+      {subtitleUrl && subtitleSettingsOpen && (
+        <div className="subtitleSettings" role="group" aria-label="자막 표시 설정">
+          <label>크기
+            <select
+              value={subtitleSize}
+              aria-label="자막 크기"
+              onChange={event => setSubtitleSize(event.target.value as SubtitleSize)}
+            >
+              <option value="subtitleSizeSmall">작게</option>
+              <option value="subtitleSizeMedium">보통</option>
+              <option value="subtitleSizeLarge">크게</option>
+              <option value="subtitleSizeExtraLarge">아주 크게</option>
+            </select>
+          </label>
+          <label>배경
+            <select
+              value={subtitleBackground}
+              aria-label="자막 배경"
+              onChange={event => setSubtitleBackground(event.target.value as SubtitleBackground)}
+            >
+              <option value="subtitleBgNone">없음</option>
+              <option value="subtitleBgSoft">반투명</option>
+              <option value="subtitleBgDark">진하게</option>
+            </select>
+          </label>
+        </div>
+      )}
       <div className="videoControls">
         <input
           className="videoSeek"
@@ -189,7 +222,18 @@ export function VideoPlayer({
           >
             <ClosedCaptioning weight={subtitleUrl ? "fill" : "regular"} />
           </button>
-          {subtitleUrl && <button type="button" className="subtitleRemove" onClick={onRemoveSubtitle}>자막 끄기</button>}
+          {subtitleUrl && (
+            <button
+              type="button"
+              className={subtitleSettingsOpen ? "active" : ""}
+              aria-label="자막 표시 설정"
+              aria-expanded={subtitleSettingsOpen}
+              onClick={() => setSubtitleSettingsOpen(open => !open)}
+            >
+              <SlidersHorizontal />
+            </button>
+          )}
+          {subtitleUrl && <button type="button" className="subtitleRemove" onClick={() => { setSubtitleSettingsOpen(false); onRemoveSubtitle(); }}>자막 끄기</button>}
           <button type="button" onClick={toggleFullscreen} aria-label="전체 화면"><ArrowsOut /></button>
         </div>
       </div>
