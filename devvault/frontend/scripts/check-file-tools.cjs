@@ -17,7 +17,7 @@ assert.match(playerSource, /subtitleBgNone/);
 assert.match(source, /async function attachTag/);
 assert.match(source, /\/api\/files\/\$\{selected\.id\}\/tags/);
 assert.match(source, /usedPercent >= 80/);
-assert.match(source, /setUploadFailure\(file\.name\)/);
+assert.match(source, /setUploadFailure\(/);
 assert.match(source, /aria-label="알림 목록"/);
 
 const formatSource = source.slice(source.indexOf("function formatSize"), source.indexOf("function formatStorage"));

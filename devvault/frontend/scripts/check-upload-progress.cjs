@@ -4,6 +4,10 @@ const vm = require("node:vm");
 const ts = require("typescript");
 
 const source = fs.readFileSync("lib/api.ts", "utf8");
+const vaultSource = fs.readFileSync("components/vault-app.tsx", "utf8");
+assert.match(vaultSource, /type="file" multiple/);
+assert.match(vaultSource, /for \(const \[index, file\] of files\.entries\(\)\)/);
+assert.match(vaultSource, /failedFiles/);
 const code = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 }
 }).outputText;

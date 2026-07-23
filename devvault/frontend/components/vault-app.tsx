@@ -119,7 +119,7 @@ export function VaultApp() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
-  const [uploadProgress, setUploadProgress] = useState<{ name: string; loaded: number; total: number } | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{ name: string; loaded: number; total: number; current: number; count: number } | null>(null);
   // ponytail: upload failures are session-local; persist server-side if notification history becomes necessary.
   const [uploadFailure, setUploadFailure] = useState<string | null>(null);
   const [notificationOpen, setNotificationOpen] = useState(false);
@@ -307,22 +307,39 @@ export function VaultApp() {
   }
 
   async function upload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const body = new FormData();
-    body.append("file", file);
-    if (currentFolder) body.append("folderId", String(currentFolder.id));
-    setUploadProgress({ name: file.name, loaded: 0, total: file.size });
+    const files = Array.from(event.target.files ?? []);
+    if (!files.length) return;
+    const totalBytes = files.reduce((total, file) => total + file.size, 0);
+    const failedFiles: string[] = [];
+    let completedBytes = 0;
+    let uploadedCount = 0;
+    // ponytail: sequential uploads reuse the existing endpoint and bound server load; add limited concurrency only if measured.
     try {
-      const response = await apiUpload("/api/files", body, (loaded, total) => {
-        setUploadProgress({ name: file.name, loaded, total: total || file.size });
-      });
-      if (!response.ok) throw new Error();
-      notify("업로드가 완료되었습니다.");
+      for (const [index, file] of files.entries()) {
+        const body = new FormData();
+        body.append("file", file);
+        if (currentFolder) body.append("folderId", String(currentFolder.id));
+        setUploadProgress({ name: file.name, loaded: completedBytes, total: totalBytes, current: index + 1, count: files.length });
+        try {
+          const response = await apiUpload("/api/files", body, (loaded, total) => {
+            const fileLoaded = total > 0 ? file.size * Math.min(1, loaded / total) : Math.min(file.size, loaded);
+            setUploadProgress({ name: file.name, loaded: completedBytes + fileLoaded, total: totalBytes, current: index + 1, count: files.length });
+          });
+          if (!response.ok) throw new Error();
+          uploadedCount++;
+        } catch {
+          failedFiles.push(file.name);
+        }
+        completedBytes += file.size;
+      }
+      if (failedFiles.length) {
+        setUploadFailure(`${failedFiles.length}개 실패: ${failedFiles.slice(0, 3).join(", ")}${failedFiles.length > 3 ? " 외" : ""}`);
+        notify(`${uploadedCount}개 업로드, ${failedFiles.length}개 실패`);
+      } else {
+        setUploadFailure(null);
+        notify(`${uploadedCount}개 파일을 업로드했습니다.`);
+      }
       await load();
-    } catch {
-      setUploadFailure(file.name);
-      notify("업로드에 실패했습니다.");
     } finally {
       setUploadProgress(null);
       event.target.value = "";
@@ -576,8 +593,8 @@ export function VaultApp() {
         <div className="contentHeader">
           <div><h1>{currentFolder?.name || navItems.find(item => item.id === nav)?.label}</h1>{currentFolder && <button className="breadcrumb" onClick={() => setCurrentFolder(null)}>파일 / {currentFolder.name}</button>}</div>
           <div className="headerActions">
-            <input ref={uploadRef} type="file" hidden onChange={upload} />
-            <button className="primaryButton" disabled={Boolean(uploadProgress)} onClick={() => uploadRef.current?.click()}><UploadSimple />{uploadProgress ? `${uploadPercent}%` : "업로드"}</button>
+            <input ref={uploadRef} type="file" multiple hidden onChange={upload} />
+            <button className="primaryButton" disabled={Boolean(uploadProgress)} onClick={() => uploadRef.current?.click()}><UploadSimple />{uploadProgress ? `${uploadProgress.current}/${uploadProgress.count}` : "업로드"}</button>
             <div className="viewToggle" aria-label="보기 방식">
               <button className={view === "list" ? "active" : ""} onClick={() => setView("list")}><List />목록</button>
               <button className={view === "grid" ? "active" : ""} onClick={() => setView("grid")}><GridFour />그리드</button>
@@ -586,7 +603,7 @@ export function VaultApp() {
         </div>
 
         {uploadProgress && <div className="uploadProgress" role="status" aria-live="polite">
-          <div><strong>{uploadProgress.name}</strong><span>{formatStorage(uploadProgress.loaded)} / {formatStorage(uploadProgress.total)} · {uploadPercent}%</span></div>
+          <div><strong>{uploadProgress.current}/{uploadProgress.count} · {uploadProgress.name}</strong><span>{formatStorage(uploadProgress.loaded)} / {formatStorage(uploadProgress.total)} · {uploadPercent}%</span></div>
           <div className="uploadProgressTrack" aria-label={`업로드 진행률 ${uploadPercent}%`}><span style={{ width: `${uploadPercent}%` }} /></div>
         </div>}
 
