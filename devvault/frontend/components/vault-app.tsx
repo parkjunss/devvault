@@ -10,8 +10,10 @@ import {
   SlidersHorizontal, Star, Trash, UploadSimple, UserCircle, Users, X
 } from "@phosphor-icons/react";
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { VideoPlayer } from "@/components/video-player";
 import { apiFetch, apiJson, apiUpload } from "@/lib/api";
 import { clearTokens, getAccessToken, getRefreshToken, tokenHasRole } from "@/lib/auth";
+import { decodeSubtitleFile } from "@/lib/subtitles";
 import type { Folder, PageResponse, Tag, VaultFile } from "@/lib/types";
 
 type Nav = "all" | "favorite" | "recent" | "shared" | "trash";
@@ -102,8 +104,6 @@ export function VaultApp() {
   const router = useRouter();
   const searchRef = useRef<HTMLInputElement>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
-  const subtitleRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const [nav, setNav] = useState<Nav>("all");
   const [view, setView] = useState<View>("list");
   const [query, setQuery] = useState("");
@@ -132,8 +132,7 @@ export function VaultApp() {
   const [tagPending, setTagPending] = useState(false);
   const [profileName, setProfileName] = useState("");
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
-  const [subtitle, setSubtitle] = useState<{ fileId: number; url: string } | null>(null);
-  const [playbackRate, setPlaybackRate] = useState(1);
+  const [subtitle, setSubtitle] = useState<{ fileId: number; url: string; name: string } | null>(null);
   const [actionDialog, setActionDialog] = useState<ActionDialog | null>(null);
   const [actionPending, setActionPending] = useState(false);
 
@@ -428,16 +427,16 @@ export function VaultApp() {
     URL.revokeObjectURL(url);
   }
 
-  async function loadSubtitle(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file || !selectedId) return;
-    if (!(await file.text()).trimStart().startsWith("WEBVTT")) {
-      notify("WEBVTT 형식의 .vtt 자막만 사용할 수 있습니다.");
-      event.target.value = "";
-      return;
+  async function loadSubtitle(file: File) {
+    if (!selectedId) return;
+    try {
+      const vtt = await decodeSubtitleFile(file);
+      const url = URL.createObjectURL(new Blob([vtt], { type: "text/vtt;charset=utf-8" }));
+      setSubtitle({ fileId: selectedId, url, name: file.name });
+      notify(`${file.name} 자막을 적용했습니다.`);
+    } catch (exception) {
+      notify(exception instanceof Error ? exception.message : "자막을 읽지 못했습니다.");
     }
-    setSubtitle({ fileId: selectedId, url: URL.createObjectURL(file) });
-    event.target.value = "";
   }
 
   async function attachTag(event: FormEvent<HTMLFormElement>) {
@@ -636,14 +635,8 @@ export function VaultApp() {
       {selected && <aside className={`previewPanel ${previewExpanded ? "expanded" : ""}`} aria-label="파일 미리보기">
         <header><FileGlyph file={selected} /><strong>{selected.originalName}</strong><button className="iconButton" onClick={() => setPreviewExpanded(value => !value)} aria-label={previewExpanded ? "작게 보기" : "크게 보기"}>{previewExpanded ? <ArrowsIn /> : <ArrowsOut />}</button><button className="iconButton" onClick={() => { setPreviewExpanded(false); setSelected(null); }} aria-label="미리보기 닫기"><X /></button></header>
         <div className={`previewFrame ${fileType(selected)}`}>
-          {previewText !== null ? <pre>{previewText || "내용이 없습니다."}</pre> : previewUrl && fileType(selected) === "pdf" ? <iframe src={previewUrl} title={`${selected.originalName} 미리보기`} /> : previewUrl && fileType(selected) === "audio" ? <audio controls src={previewUrl} /> : previewUrl && fileType(selected) === "video" ? <video key={subtitleUrl || "no-subtitle"} ref={videoRef} controls preload="metadata" src={previewUrl} onLoadedMetadata={event => { event.currentTarget.playbackRate = playbackRate; }}>{subtitleUrl && <track kind="captions" src={subtitleUrl} srcLang="ko" label="사용자 자막" default onLoad={event => { event.currentTarget.track.mode = "showing"; }} />}</video> : previewUrl ? <Image unoptimized src={previewUrl} alt={`${selected.originalName} 미리보기`} width={640} height={820} /> : <FileGlyph file={selected} size={48} />}
+          {previewText !== null ? <pre>{previewText || "내용이 없습니다."}</pre> : previewUrl && fileType(selected) === "pdf" ? <iframe src={previewUrl} title={`${selected.originalName} 미리보기`} /> : previewUrl && fileType(selected) === "audio" ? <audio controls src={previewUrl} /> : previewUrl && fileType(selected) === "video" ? <VideoPlayer src={previewUrl} subtitleUrl={subtitleUrl} subtitleName={subtitle?.name} onSubtitleFile={loadSubtitle} onRemoveSubtitle={() => setSubtitle(null)} /> : previewUrl ? <Image unoptimized src={previewUrl} alt={`${selected.originalName} 미리보기`} width={640} height={820} /> : <FileGlyph file={selected} size={48} />}
         </div>
-        {fileType(selected) === "video" && <div className="videoSettings">
-          <label>재생 속도<select value={playbackRate} onChange={event => { const rate = Number(event.target.value); setPlaybackRate(rate); if (videoRef.current) videoRef.current.playbackRate = rate; }}><option value="0.5">0.5×</option><option value="1">1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label>
-          <input ref={subtitleRef} type="file" accept=".vtt,text/vtt" hidden onChange={loadSubtitle} />
-          <button className="secondaryButton" onClick={() => subtitleRef.current?.click()}>{subtitleUrl ? "자막 변경" : "WebVTT 자막 추가"}</button>
-          {subtitleUrl && <button className="secondaryButton" onClick={() => setSubtitle(null)}>자막 제거</button>}
-        </div>}
         <dl>
           <div><dt>유형</dt><dd>{selected.contentType || "알 수 없음"}</dd></div>
           <div><dt>크기</dt><dd>{formatSize(selected.size)}</dd></div>

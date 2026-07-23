@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "test:file-tools": "node scripts/check-file-tools.cjs",
+    "test:subtitles": "node scripts/check-subtitles.cjs",
     "test:refresh": "node scripts/check-refresh-single-flight.cjs",
     "test:upload": "node scripts/check-upload-progress.cjs"
   },

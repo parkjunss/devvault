@@ -166,16 +166,24 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .previewPanel.expanded { position: fixed; inset: 24px; z-index: 100; width: auto; height: auto; min-height: 0; border: 1px solid var(--line); border-radius: 12px; background: #fff; box-shadow: 0 0 0 100vmax rgba(18,32,29,.5), 0 20px 60px rgba(18,32,29,.25); }
 .previewPanel.expanded .previewFrame { min-height: 90vh; }
 .previewPanel.expanded .previewFrame img, .previewPanel.expanded .previewFrame iframe { min-height: 90vh; }
-.previewPanel.expanded .previewFrame video { max-height: 75vh; }
+.previewPanel.expanded .videoPlayer video { max-height: 75vh; }
 .previewPanel.expanded .previewFrame pre { min-height: 90vh; max-height: none; }
 .previewFrame { min-height: 340px; border: 1px solid #dfe4e2; border-radius: 7px; background: #fbfcfb; overflow: hidden; display: flex; align-items: center; justify-content: center; }
 .previewFrame img, .previewFrame iframe { width: 100%; height: 100%; min-height: 340px; border: 0; object-fit: contain; background: #fff; }
 .previewFrame audio { width: calc(100% - 32px); }
-.previewFrame video { width: 100%; max-height: 520px; background: #000; }
-.videoSettings { margin-top: 12px; display: flex; align-items: end; gap: 8px; flex-wrap: wrap; }
-.videoSettings label { display: grid; gap: 5px; color: var(--muted); font-size: 11px; }
-.videoSettings select { height: 36px; border: 1px solid #d6dcda; border-radius: 6px; padding: 0 9px; background: #fff; }
-.videoSettings button { min-height: 36px; }
+.videoPlayer { position: relative; width: 100%; align-self: stretch; display: flex; align-items: center; background: #000; overflow: hidden; }
+.videoPlayer video { display: block; width: 100%; max-height: 520px; background: #000; cursor: pointer; }
+.videoPlayer video::cue { color: #fff; background: rgba(0, 0, 0, .72); font-size: 1.05rem; }
+.videoControls { position: absolute; right: 0; bottom: 0; left: 0; padding: 24px 12px 10px; color: #fff; background: linear-gradient(transparent, rgba(0, 0, 0, .86)); }
+.videoSeek { display: block; width: 100%; height: 4px; margin: 0 0 9px; accent-color: var(--accent); cursor: pointer; }
+.videoControlRow { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.videoControlRow button { width: 32px; height: 32px; padding: 0; border: 0; border-radius: 6px; color: #fff; background: transparent; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.videoControlRow button:hover, .videoControlRow button.active { background: rgba(255, 255, 255, .18); }
+.videoControlRow button svg { width: 20px; height: 20px; }
+.videoControlRow .subtitleRemove { width: auto; padding: 0 7px; font-size: 11px; white-space: nowrap; }
+.videoTime { min-width: 92px; font-size: 11px; font-variant-numeric: tabular-nums; }
+.videoVolume { width: 68px; accent-color: #fff; }
+.videoControlRow select { height: 30px; border: 1px solid rgba(255, 255, 255, .3); border-radius: 5px; padding: 0 5px; color: #fff; background: rgba(0, 0, 0, .6); }
 .previewFrame pre { width: 100%; min-height: 340px; max-height: 420px; margin: 0; padding: 20px; overflow: auto; background: #111919; color: #d8e7e3; font: 12px/1.65 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; }
 .previewPanel dl { margin: 26px 0 0; display: grid; gap: 14px; font-size: 12px; }
 .previewPanel dl div { display: grid; grid-template-columns: 74px minmax(0,1fr); gap: 8px; }
