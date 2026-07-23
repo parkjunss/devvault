@@ -6,6 +6,7 @@ import org.eardream.devvault.admin.repository.AdminAuditLogRepository;
 import org.eardream.devvault.auth.repository.RefreshTokenRepository;
 import org.eardream.devvault.file.entity.StoredFile;
 import org.eardream.devvault.file.repository.StoredFileRepository;
+import org.eardream.devvault.file.service.FileStorageService;
 import org.eardream.devvault.user.entity.Role;
 import org.eardream.devvault.user.entity.User;
 import org.eardream.devvault.user.entity.UserRole;
@@ -40,6 +41,7 @@ public class AdminService {
     private final RoleRepository roleRepository;
     private final UserRoleRepository userRoleRepository;
     private final StoredFileRepository storedFileRepository;
+    private final FileStorageService fileStorageService;
     private final AdminAuditLogRepository auditLogRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final OAuthAccountRepository oauthAccountRepository;
@@ -173,11 +175,7 @@ public class AdminService {
     @Transactional
     public int deleteFiles(String adminEmail, Set<Long> fileIds) {
         User admin = currentAdmin(adminEmail);
-        if (fileIds == null || fileIds.isEmpty() || fileIds.size() > 100
-                || fileIds.stream().anyMatch(java.util.Objects::isNull)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "삭제할 파일을 1개 이상 100개 이하로 선택해 주세요.");
-        }
+        validateFileIds(fileIds);
         int deleted = 0;
         for (StoredFile file : storedFileRepository.findAllById(fileIds)) {
             if (file.isDeleted()) {
@@ -186,6 +184,23 @@ public class AdminService {
             file.softDelete();
             audit(admin, "DELETE_FILE", "FILE", file.getId(),
                     file.getOwner().getEmail() + ":" + file.getOriginalName());
+            deleted++;
+        }
+        return deleted;
+    }
+
+    @Transactional
+    public int deleteFilesPermanently(String adminEmail, Set<Long> fileIds) {
+        User admin = currentAdmin(adminEmail);
+        validateFileIds(fileIds);
+        int deleted = 0;
+        for (StoredFile file : storedFileRepository.findAllById(fileIds)) {
+            if (!file.isDeleted()) {
+                continue;
+            }
+            audit(admin, "PERMANENT_DELETE_FILE", "FILE", file.getId(),
+                    file.getOwner().getEmail() + ":" + file.getOriginalName());
+            fileStorageService.deletePermanently(file.getOwner().getEmail(), file.getId());
             deleted++;
         }
         return deleted;
@@ -228,6 +243,14 @@ public class AdminService {
         return normalized;
     }
 
+    private static void validateFileIds(Set<Long> fileIds) {
+        if (fileIds == null || fileIds.isEmpty() || fileIds.size() > 100
+                || fileIds.stream().anyMatch(java.util.Objects::isNull)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "삭제할 파일을 1개 이상 100개 이하로 선택해 주세요.");
+        }
+    }
+
     private static Set<String> rolesOf(User user) {
         Set<String> roles = new TreeSet<>();
         user.getUserRoles().forEach(userRole -> roles.add(userRole.getRole().getRole()));
@@ -247,7 +270,8 @@ public class AdminService {
 
     private UserSummary toUserSummary(User user) {
         return new UserSummary(user.getId(), user.getEmail(), user.getUsername(), user.isEnabled(),
-                rolesOf(user), user.getStorageQuotaBytes(), storedFileRepository.sumStoredBytes(user.getEmail()));
+                rolesOf(user), user.getStorageQuotaBytes(), storedFileRepository.sumStoredBytes(user.getEmail()),
+                user.getDeletedAt());
     }
 
     private static FileSummary toFileSummary(StoredFile file) {
@@ -273,7 +297,7 @@ public class AdminService {
     }
 
     public record UserSummary(Long id, String email, String username, boolean enabled, Set<String> roles,
-                              long storageQuotaBytes, long usedBytes) {
+                              long storageQuotaBytes, long usedBytes, Instant deletedAt) {
     }
 
     public record FileSummary(Long id, String ownerEmail, String originalName, String contentType, long size,

@@ -370,9 +370,11 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .adminFiles { overflow-x: auto; }
 .adminBulkBar { min-width: 760px; min-height: 58px; padding: 10px 22px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; background: #fafcfb; }
 .adminBulkBar span { color: var(--muted); font-size: 12px; }
+.adminBulkBar > div { display: flex; gap: 8px; }
 .adminBulkBar .dangerButton { min-height: 36px; padding: 0 13px; font-size: 12px; }
+.adminBulkBar .dangerButton.permanent { background: #811f1f; }
 .adminFileTable { min-width: 760px; }
-.adminFileHead, .adminFileRow { display: grid; grid-template-columns: 28px minmax(220px,1.3fr) minmax(180px,1fr) minmax(150px,.7fr) 90px; align-items: center; gap: 12px; padding: 0 22px; }
+.adminFileHead, .adminFileRow { display: grid; grid-template-columns: 28px minmax(220px,1.3fr) minmax(180px,1fr) 70px minmax(150px,.7fr) 90px; align-items: center; gap: 12px; padding: 0 22px; }
 .adminFileHead { min-height: 42px; border-bottom: 1px solid var(--line); color: var(--muted); background: #fafcfb; font-size: 11px; }
 .adminFileRow { min-height: 58px; border-bottom: 1px solid #edf0ef; color: #53605d; font-size: 11px; }
 .adminFileRow strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #293431; font-size: 12px; }

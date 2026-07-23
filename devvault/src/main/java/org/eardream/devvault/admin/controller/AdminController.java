@@ -81,6 +81,12 @@ public class AdminController {
         return new BulkDeleteResponse(adminService.deleteFiles(jwt.getSubject(), request.fileIds()));
     }
 
+    @PostMapping("/files/bulk-permanent-delete")
+    BulkDeleteResponse deleteFilesPermanently(@AuthenticationPrincipal Jwt jwt,
+                                              @Valid @RequestBody BulkDeleteRequest request) {
+        return new BulkDeleteResponse(adminService.deleteFilesPermanently(jwt.getSubject(), request.fileIds()));
+    }
+
     @GetMapping("/audit-logs")
     Page<AdminService.AuditLogSummary> auditLogs(@AuthenticationPrincipal Jwt jwt,
                                                  @PageableDefault(size = 20, sort = "createdAt",

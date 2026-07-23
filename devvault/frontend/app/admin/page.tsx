@@ -9,9 +9,9 @@ import { tokenHasRole, tokenSubject } from "@/lib/auth";
 import type { PageResponse } from "@/lib/types";
 
 type Dashboard = { userCount: number; enabledUserCount: number; fileCount: number; usedBytes: number; serviceStatus: string };
-type AdminUser = { id: number; email: string; username: string; enabled: boolean; roles: string[]; storageQuotaBytes: number; usedBytes: number };
+type AdminUser = { id: number; email: string; username: string; enabled: boolean; roles: string[]; storageQuotaBytes: number; usedBytes: number; deletedAt: string | null };
 type AdminFile = { id: number; ownerEmail: string; originalName: string; contentType: string | null; size: number; deletedAt: string | null };
-type ConfirmTarget = { kind: "user"; user: AdminUser } | { kind: "files"; ids: number[] };
+type ConfirmTarget = { kind: "user"; user: AdminUser } | { kind: "files"; ids: number[]; permanent: boolean };
 
 function formatStorage(bytes: number) {
   if (bytes < 1_000) return `${bytes}B`;
@@ -35,6 +35,9 @@ export default function AdminPage() {
   const [confirmTarget, setConfirmTarget] = useState<ConfirmTarget | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [notice, setNotice] = useState("");
+  const selectedFiles = files.filter(file => selectedFileIds.has(file.id));
+  const activeSelectedIds = selectedFiles.filter(file => !file.deletedAt).map(file => file.id);
+  const deletedSelectedIds = selectedFiles.filter(file => file.deletedAt).map(file => file.id);
 
   useEffect(() => {
     if (!tokenSubject()) return router.replace("/login");
@@ -60,7 +63,7 @@ export default function AdminPage() {
     const params = new URLSearchParams({ size: "100" });
     if (search.trim()) params.set("query", search.trim());
     const result = await apiJson<PageResponse<AdminFile>>(`/api/admin/files?${params}`);
-    setFiles(result.content.filter(file => !file.deletedAt));
+    setFiles(result.content);
     setSelectedFileIds(new Set());
   }
 
@@ -130,11 +133,16 @@ export default function AdminPage() {
         await Promise.all([loadUsers(userQuery), loadDashboard()]);
         setNotice("사용자 계정을 삭제하고 로그인 정보를 폐기했습니다. 저장 파일은 유지됩니다.");
       } else {
-        const result = await apiJson<{ deletedCount: number }>("/api/admin/files/bulk-delete", {
+        const endpoint = confirmTarget.permanent
+          ? "/api/admin/files/bulk-permanent-delete"
+          : "/api/admin/files/bulk-delete";
+        const result = await apiJson<{ deletedCount: number }>(endpoint, {
           method: "POST", body: JSON.stringify({ fileIds: confirmTarget.ids })
         });
         await Promise.all([loadFiles(fileQuery), loadDashboard()]);
-        setNotice(`${result.deletedCount}개 파일을 휴지통으로 이동했습니다.`);
+        setNotice(confirmTarget.permanent
+          ? `${result.deletedCount}개 파일을 영구 삭제했습니다.`
+          : `${result.deletedCount}개 파일을 휴지통으로 이동했습니다.`);
       }
       setConfirmTarget(null);
     } catch {
@@ -161,12 +169,13 @@ export default function AdminPage() {
           {users.map(user => {
             const isRowPending = pendingId === user.id;
             const isAdmin = user.roles.includes("ROLE_ADMIN");
+            const isDeleted = !!user.deletedAt;
             return <div className="adminUserRow" key={user.id}>
               <span className="adminIdentity"><strong>{user.username}</strong><small>{user.email}</small></span>
-              <span className={`statusBadge ${user.enabled ? "enabled" : "disabled"}`}>{user.enabled ? "활성" : "비활성"}</span>
-              <span className="quotaControl"><input type="number" min={user.usedBytes / 1_000_000_000} step="0.1" value={quotaInputs[user.id] ?? ""} onChange={event => setQuotaInputs(inputs => ({ ...inputs, [user.id]: event.target.value }))} aria-label={`${user.email} 저장 용량 GB`} /><small>GB</small><button disabled={isRowPending} onClick={() => updateQuota(user)}>적용</button><em>사용 {formatStorage(user.usedBytes)} / 한도 {formatStorage(user.storageQuotaBytes)}</em></span>
-              <span className={`roleBadge ${isAdmin ? "admin" : ""}`}>{isAdmin ? "관리자" : "사용자"}</span>
-              <span className="adminRowActions"><button disabled={isRowPending} onClick={() => updateUser(user, { enabled: !user.enabled }, user.enabled ? "사용자를 비활성화했습니다." : "사용자를 활성화했습니다.")}>{user.enabled ? "비활성화" : "활성화"}</button><button disabled={isRowPending} onClick={() => updateUser(user, { roles: isAdmin ? ["ROLE_USER"] : ["ROLE_USER", "ROLE_ADMIN"] }, isAdmin ? "관리자 권한을 해제했습니다." : "관리자 권한을 부여했습니다.")}>{isAdmin ? "관리자 해제" : "관리자 지정"}</button><button className="dangerButton" disabled={isRowPending || isAdmin} title={isAdmin ? "관리자 권한을 먼저 해제해 주세요." : "계정 삭제"} onClick={() => setConfirmTarget({ kind: "user", user })}><Trash />삭제</button></span>
+              <span className={`statusBadge ${user.enabled && !isDeleted ? "enabled" : "disabled"}`}>{isDeleted ? "삭제됨" : user.enabled ? "활성" : "비활성"}</span>
+              <span className="quotaControl"><input disabled={isDeleted} type="number" min={user.usedBytes / 1_000_000_000} step="0.1" value={quotaInputs[user.id] ?? ""} onChange={event => setQuotaInputs(inputs => ({ ...inputs, [user.id]: event.target.value }))} aria-label={`${user.email} 저장 용량 GB`} /><small>GB</small><button disabled={isRowPending || isDeleted} onClick={() => updateQuota(user)}>적용</button><em>사용 {formatStorage(user.usedBytes)} / 한도 {formatStorage(user.storageQuotaBytes)}</em></span>
+              <span className={`roleBadge ${isAdmin ? "admin" : ""}`}>{isDeleted ? "삭제 계정" : isAdmin ? "관리자" : "사용자"}</span>
+              <span className="adminRowActions"><button disabled={isRowPending || isDeleted} onClick={() => updateUser(user, { enabled: !user.enabled }, user.enabled ? "사용자를 비활성화했습니다." : "사용자를 활성화했습니다.")}>{user.enabled ? "비활성화" : "활성화"}</button><button disabled={isRowPending || isDeleted} onClick={() => updateUser(user, { roles: isAdmin ? ["ROLE_USER"] : ["ROLE_USER", "ROLE_ADMIN"] }, isAdmin ? "관리자 권한을 해제했습니다." : "관리자 권한을 부여했습니다.")}>{isAdmin ? "관리자 해제" : "관리자 지정"}</button><button className="dangerButton" disabled={isRowPending || isAdmin || isDeleted} title={isDeleted ? "이미 삭제된 계정입니다." : isAdmin ? "관리자 권한을 먼저 해제해 주세요." : "계정 삭제"} onClick={() => setConfirmTarget({ kind: "user", user })}><Trash />{isDeleted ? "삭제됨" : "삭제"}</button></span>
             </div>;
           })}
           {!users.length && <div className="stateMessage">검색된 사용자가 없습니다.</div>}
@@ -174,11 +183,11 @@ export default function AdminPage() {
       </section>
 
       <section className="adminUsers adminFiles">
-        <div className="adminUsersHeader"><div><h2>파일 관리</h2><span>활성 파일을 최대 100개씩 표시합니다.</span></div><form onSubmit={searchFiles}><MagnifyingGlass /><input value={fileQuery} onChange={event => setFileQuery(event.target.value)} maxLength={100} placeholder="파일명 또는 소유자 검색" /><button>검색</button></form></div>
-        <div className="adminBulkBar"><span>{selectedFileIds.size}개 선택</span><button className="dangerButton" disabled={!selectedFileIds.size} onClick={() => setConfirmTarget({ kind: "files", ids: [...selectedFileIds] })}><Trash />선택 삭제</button></div>
+        <div className="adminUsersHeader"><div><h2>파일 관리</h2><span>활성·휴지통 파일을 최대 100개씩 표시합니다.</span></div><form onSubmit={searchFiles}><MagnifyingGlass /><input value={fileQuery} onChange={event => setFileQuery(event.target.value)} maxLength={100} placeholder="파일명 또는 소유자 검색" /><button>검색</button></form></div>
+        <div className="adminBulkBar"><span>{selectedFileIds.size}개 선택</span><div><button className="dangerButton" disabled={!activeSelectedIds.length} onClick={() => setConfirmTarget({ kind: "files", ids: activeSelectedIds, permanent: false })}><Trash />{activeSelectedIds.length}개 휴지통 이동</button><button className="dangerButton permanent" disabled={!deletedSelectedIds.length} onClick={() => setConfirmTarget({ kind: "files", ids: deletedSelectedIds, permanent: true })}><Trash />{deletedSelectedIds.length}개 영구 삭제</button></div></div>
         <div className="adminFileTable">
-          <div className="adminFileHead"><input type="checkbox" checked={files.length > 0 && selectedFileIds.size === files.length} onChange={toggleAllFiles} aria-label="현재 파일 전체 선택" /><span>파일명</span><span>소유자</span><span>형식</span><span>용량</span></div>
-          {files.map(file => <div className="adminFileRow" key={file.id}><input type="checkbox" checked={selectedFileIds.has(file.id)} onChange={() => toggleFile(file.id)} aria-label={`${file.originalName} 선택`} /><strong>{file.originalName}</strong><span>{file.ownerEmail}</span><span>{file.contentType || "-"}</span><span>{formatStorage(file.size)}</span></div>)}
+          <div className="adminFileHead"><input type="checkbox" checked={files.length > 0 && selectedFileIds.size === files.length} onChange={toggleAllFiles} aria-label="현재 파일 전체 선택" /><span>파일명</span><span>소유자</span><span>상태</span><span>형식</span><span>용량</span></div>
+          {files.map(file => <div className="adminFileRow" key={file.id}><input type="checkbox" checked={selectedFileIds.has(file.id)} onChange={() => toggleFile(file.id)} aria-label={`${file.originalName} 선택`} /><strong>{file.originalName}</strong><span>{file.ownerEmail}</span><span className={`statusBadge ${file.deletedAt ? "disabled" : "enabled"}`}>{file.deletedAt ? "휴지통" : "활성"}</span><span>{file.contentType || "-"}</span><span>{formatStorage(file.size)}</span></div>)}
           {!files.length && <div className="stateMessage">표시할 파일이 없습니다.</div>}
         </div>
       </section>
@@ -186,9 +195,9 @@ export default function AdminPage() {
 
     {confirmTarget && <div className="modalBackdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && !confirming) setConfirmTarget(null); }}>
       <section className="actionDialog" role="dialog" aria-modal="true" aria-labelledby="delete-title">
-        <header><h2 id="delete-title">{confirmTarget.kind === "user" ? "사용자 계정을 삭제할까요?" : `${confirmTarget.ids.length}개 파일을 삭제할까요?`}</h2><button className="iconButton" disabled={confirming} onClick={() => setConfirmTarget(null)} aria-label="닫기"><X /></button></header>
-        {confirmTarget.kind === "user" ? <p><strong>{confirmTarget.user.email}</strong>의 로그인·OAuth·권한 정보가 폐기되고 계정이 익명화됩니다. 사용자가 보관한 파일과 감사 기록은 유지됩니다.</p> : <p>선택한 파일은 소유자의 <strong>휴지통</strong>으로 이동합니다. 영구 삭제가 아니므로 복원할 수 있습니다.</p>}
-        <footer><button className="secondaryButton" disabled={confirming} onClick={() => setConfirmTarget(null)}>취소</button><button className="dangerButton" disabled={confirming} onClick={confirmDelete}>{confirming ? "처리 중..." : "삭제"}</button></footer>
+        <header><h2 id="delete-title">{confirmTarget.kind === "user" ? "사용자 계정을 삭제할까요?" : confirmTarget.permanent ? `${confirmTarget.ids.length}개 파일을 영구 삭제할까요?` : `${confirmTarget.ids.length}개 파일을 삭제할까요?`}</h2><button className="iconButton" disabled={confirming} onClick={() => setConfirmTarget(null)} aria-label="닫기"><X /></button></header>
+        {confirmTarget.kind === "user" ? <p><strong>{confirmTarget.user.email}</strong>의 로그인·OAuth·권한 정보가 폐기되고 계정이 익명화됩니다. 사용자가 보관한 파일과 감사 기록은 유지됩니다.</p> : confirmTarget.permanent ? <p>선택한 휴지통 파일을 저장소에서도 제거합니다. <strong>이 작업은 되돌릴 수 없습니다.</strong></p> : <p>선택한 파일은 소유자의 <strong>휴지통</strong>으로 이동합니다. 영구 삭제가 아니므로 복원할 수 있습니다.</p>}
+        <footer><button className="secondaryButton" disabled={confirming} onClick={() => setConfirmTarget(null)}>취소</button><button className="dangerButton" disabled={confirming} onClick={confirmDelete}>{confirming ? "처리 중..." : confirmTarget.kind === "files" && confirmTarget.permanent ? "영구 삭제" : "삭제"}</button></footer>
       </section>
     </div>}
   </main>;

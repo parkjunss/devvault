@@ -69,8 +69,7 @@ public interface StoredFileRepository extends JpaRepository<StoredFile, Long> {
 
     @Query("""
             select file from StoredFile file
-            where file.deletedAt is null
-              and (:query is null
+            where (:query is null
                or locate(:query, lower(file.originalName)) > 0
                or locate(:query, lower(file.owner.email)) > 0)
             """)

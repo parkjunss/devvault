@@ -23,8 +23,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     @Query("""
             select user from User user
-            where user.deletedAt is null
-              and (:query is null
+            where (:query is null
                or locate(:query, lower(user.email)) > 0
                or locate(:query, lower(user.username)) > 0)
             """)
