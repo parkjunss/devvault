@@ -18,6 +18,7 @@ type Nav = "all" | "favorite" | "recent" | "shared" | "trash";
 type View = "list" | "grid";
 type Dashboard = { fileCount: number; usedBytes: number; quotaBytes: number };
 type UserProfile = { username: string; hasProfileImage: boolean };
+type PlaybackUrlResponse = { url: string };
 type ActionTarget = { type: "file"; item: VaultFile } | { type: "folder"; item: Folder };
 type ActionDialog = { action: "rename" | "delete"; target: ActionTarget; value: string; permanent: boolean };
 
@@ -247,11 +248,17 @@ export function VaultApp() {
     if (!selectedId) return;
     let objectUrl: string | null = null;
     let cancelled = false;
-    // ponytail: media previews buffer the file; add authenticated range streaming when large-file playback matters.
-    Promise.all([
-      apiJson<VaultFile>(`/api/files/${selectedId}`),
-      apiFetch(`/api/files/${selectedId}/preview`)
-    ]).then(async ([detail, response]) => {
+    apiJson<VaultFile>(`/api/files/${selectedId}`).then(async detail => {
+      if (fileType(detail) === "video") {
+        const playback = await apiJson<PlaybackUrlResponse>(`/api/files/${selectedId}/playback-url`, {
+          method: "POST"
+        });
+        if (cancelled) return;
+        setSelected(detail);
+        setPreviewUrl(playback.url);
+        return;
+      }
+      const response = await apiFetch(`/api/files/${selectedId}/preview`);
       if (!response.ok) throw new Error("미리보기를 열 수 없습니다.");
       const blob = await response.blob();
       if (cancelled) return;
@@ -629,7 +636,7 @@ export function VaultApp() {
       {selected && <aside className={`previewPanel ${previewExpanded ? "expanded" : ""}`} aria-label="파일 미리보기">
         <header><FileGlyph file={selected} /><strong>{selected.originalName}</strong><button className="iconButton" onClick={() => setPreviewExpanded(value => !value)} aria-label={previewExpanded ? "작게 보기" : "크게 보기"}>{previewExpanded ? <ArrowsIn /> : <ArrowsOut />}</button><button className="iconButton" onClick={() => { setPreviewExpanded(false); setSelected(null); }} aria-label="미리보기 닫기"><X /></button></header>
         <div className={`previewFrame ${fileType(selected)}`}>
-          {previewText !== null ? <pre>{previewText || "내용이 없습니다."}</pre> : previewUrl && fileType(selected) === "pdf" ? <iframe src={previewUrl} title={`${selected.originalName} 미리보기`} /> : previewUrl && fileType(selected) === "audio" ? <audio controls src={previewUrl} /> : previewUrl && fileType(selected) === "video" ? <video key={subtitleUrl || "no-subtitle"} ref={videoRef} controls src={previewUrl} onLoadedMetadata={event => { event.currentTarget.playbackRate = playbackRate; }}>{subtitleUrl && <track kind="captions" src={subtitleUrl} srcLang="ko" label="사용자 자막" default onLoad={event => { event.currentTarget.track.mode = "showing"; }} />}</video> : previewUrl ? <Image unoptimized src={previewUrl} alt={`${selected.originalName} 미리보기`} width={640} height={820} /> : <FileGlyph file={selected} size={48} />}
+          {previewText !== null ? <pre>{previewText || "내용이 없습니다."}</pre> : previewUrl && fileType(selected) === "pdf" ? <iframe src={previewUrl} title={`${selected.originalName} 미리보기`} /> : previewUrl && fileType(selected) === "audio" ? <audio controls src={previewUrl} /> : previewUrl && fileType(selected) === "video" ? <video key={subtitleUrl || "no-subtitle"} ref={videoRef} controls preload="metadata" src={previewUrl} onLoadedMetadata={event => { event.currentTarget.playbackRate = playbackRate; }}>{subtitleUrl && <track kind="captions" src={subtitleUrl} srcLang="ko" label="사용자 자막" default onLoad={event => { event.currentTarget.track.mode = "showing"; }} />}</video> : previewUrl ? <Image unoptimized src={previewUrl} alt={`${selected.originalName} 미리보기`} width={640} height={820} /> : <FileGlyph file={selected} size={48} />}
         </div>
         {fileType(selected) === "video" && <div className="videoSettings">
           <label>재생 속도<select value={playbackRate} onChange={event => { const rate = Number(event.target.value); setPlaybackRate(rate); if (videoRef.current) videoRef.current.playbackRate = rate; }}><option value="0.5">0.5×</option><option value="1">1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label>

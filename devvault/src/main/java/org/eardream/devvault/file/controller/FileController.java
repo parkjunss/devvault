@@ -1,11 +1,15 @@
 package org.eardream.devvault.file.controller;
 
 import org.eardream.devvault.file.service.FileStorageService;
+import org.eardream.devvault.file.service.PlaybackTokenService;
 import org.eardream.devvault.file.entity.StoredFile;
 import org.eardream.devvault.fileTag.entity.Tag;
 import org.eardream.devvault.fileTag.controller.TagController;
 import tools.jackson.databind.JsonNode;
 import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -41,9 +45,20 @@ import java.util.List;
 @RequestMapping("/api/files")
 public class FileController {
     private final FileStorageService fileStorageService;
+    private final PlaybackTokenService playbackTokenService;
+    private final boolean accelRedirectEnabled;
+    private final String accelRedirectPrefix;
 
-    public FileController(FileStorageService fileStorageService) {
+    public FileController(FileStorageService fileStorageService,
+                          PlaybackTokenService playbackTokenService,
+                          @Value("${app.storage.accel-redirect-enabled:false}") boolean accelRedirectEnabled,
+                          @Value("${app.storage.accel-redirect-prefix:/__devvault_files/}")
+                          String accelRedirectPrefix) {
         this.fileStorageService = fileStorageService;
+        this.playbackTokenService = playbackTokenService;
+        this.accelRedirectEnabled = accelRedirectEnabled;
+        this.accelRedirectPrefix = accelRedirectPrefix.endsWith("/")
+                ? accelRedirectPrefix : accelRedirectPrefix + "/";
     }
 
     @PostMapping
@@ -118,6 +133,35 @@ public class FileController {
                 .header("X-Content-Type-Options", "nosniff")
                 .header("Content-Security-Policy", "sandbox; default-src 'none'")
                 .body(new InputStreamResource(Files.newInputStream(preview.path())));
+    }
+
+    @PostMapping("/{id}/playback-url")
+    PlaybackUrlResponse playbackUrl(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
+        fileStorageService.preview(jwt.getSubject(), id);
+        String token = playbackTokenService.issue(jwt.getSubject(), id);
+        return new PlaybackUrlResponse("/api/files/playback/" + token);
+    }
+
+    @GetMapping("/playback/{token}")
+    ResponseEntity<?> playback(@PathVariable String token) {
+        PlaybackTokenService.PlaybackGrant grant = playbackTokenService.verify(token);
+        FileStorageService.StoredPreview preview = fileStorageService.preview(grant.email(), grant.fileId());
+        ContentDisposition disposition = ContentDisposition.inline()
+                .filename(preview.metadata().getOriginalName(), StandardCharsets.UTF_8)
+                .build();
+        ResponseEntity.BodyBuilder response = ResponseEntity.ok()
+                .contentType(preview.mediaType())
+                .contentLength(preview.metadata().getSize())
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .header("X-Content-Type-Options", "nosniff");
+        if (accelRedirectEnabled) {
+            return response.header("X-Accel-Redirect",
+                    accelRedirectPrefix + preview.metadata().getStoredName()).build();
+        }
+        Resource resource = new FileSystemResource(preview.path());
+        return response.body(resource);
     }
 
     @DeleteMapping("/{id}")
@@ -206,5 +250,8 @@ public class FileController {
             return new TrashFileResponse(file.getId(), file.getOriginalName(),
                     file.getFolder() == null ? null : file.getFolder().getId(), file.getSize(), file.getDeletedAt());
         }
+    }
+
+    public record PlaybackUrlResponse(String url) {
     }
 }

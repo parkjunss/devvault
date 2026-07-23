@@ -57,4 +57,8 @@ app:
     refresh-token-expiration-ms: ${JWT_REFRESH_TOKEN_EXPIRATION_MS:1209600000}
   storage:
     location: ${UPLOAD_DIR:./data/uploads}
+    accel-redirect-enabled: ${ACCEL_REDIRECT_ENABLED:false}
+    accel-redirect-prefix: /__devvault_files/
+  playback:
+    token-expiration-ms: ${PLAYBACK_TOKEN_EXPIRATION_MS:3600000}
   frontend-url: ${FRONTEND_URL:http://localhost:5173}
