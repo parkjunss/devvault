@@ -9,7 +9,7 @@ import { tokenHasRole, tokenSubject } from "@/lib/auth";
 import type { PageResponse } from "@/lib/types";
 
 type Dashboard = { userCount: number; enabledUserCount: number; fileCount: number; usedBytes: number; serviceStatus: string };
-type AdminUser = { id: number; email: string; username: string; enabled: boolean; roles: string[]; storageQuotaBytes: number };
+type AdminUser = { id: number; email: string; username: string; enabled: boolean; roles: string[]; storageQuotaBytes: number; usedBytes: number };
 type AdminFile = { id: number; ownerEmail: string; originalName: string; contentType: string | null; size: number; deletedAt: string | null };
 type ConfirmTarget = { kind: "user"; user: AdminUser } | { kind: "files"; ids: number[] };
 
@@ -95,7 +95,7 @@ export default function AdminPage() {
 
   async function updateQuota(user: AdminUser) {
     const quotaBytes = Math.round(Number(quotaInputs[user.id]) * 1_000_000_000);
-    if (!Number.isFinite(quotaBytes) || quotaBytes <= user.storageQuotaBytes) return setNotice("저장 용량은 현재 값보다 크게 입력해 주세요.");
+    if (!Number.isFinite(quotaBytes) || quotaBytes < user.usedBytes) return setNotice("저장 용량은 현재 사용량보다 작게 지정할 수 없습니다.");
     setPendingId(user.id);
     setNotice("");
     try {
@@ -164,7 +164,7 @@ export default function AdminPage() {
             return <div className="adminUserRow" key={user.id}>
               <span className="adminIdentity"><strong>{user.username}</strong><small>{user.email}</small></span>
               <span className={`statusBadge ${user.enabled ? "enabled" : "disabled"}`}>{user.enabled ? "활성" : "비활성"}</span>
-              <span className="quotaControl"><input type="number" min="1" step="1" value={quotaInputs[user.id] ?? ""} onChange={event => setQuotaInputs(inputs => ({ ...inputs, [user.id]: event.target.value }))} aria-label={`${user.email} 저장 용량 GB`} /><small>GB</small><button disabled={isRowPending} onClick={() => updateQuota(user)}>적용</button><em>현재 {formatStorage(user.storageQuotaBytes)}</em></span>
+              <span className="quotaControl"><input type="number" min={user.usedBytes / 1_000_000_000} step="0.1" value={quotaInputs[user.id] ?? ""} onChange={event => setQuotaInputs(inputs => ({ ...inputs, [user.id]: event.target.value }))} aria-label={`${user.email} 저장 용량 GB`} /><small>GB</small><button disabled={isRowPending} onClick={() => updateQuota(user)}>적용</button><em>사용 {formatStorage(user.usedBytes)} / 한도 {formatStorage(user.storageQuotaBytes)}</em></span>
               <span className={`roleBadge ${isAdmin ? "admin" : ""}`}>{isAdmin ? "관리자" : "사용자"}</span>
               <span className="adminRowActions"><button disabled={isRowPending} onClick={() => updateUser(user, { enabled: !user.enabled }, user.enabled ? "사용자를 비활성화했습니다." : "사용자를 활성화했습니다.")}>{user.enabled ? "비활성화" : "활성화"}</button><button disabled={isRowPending} onClick={() => updateUser(user, { roles: isAdmin ? ["ROLE_USER"] : ["ROLE_USER", "ROLE_ADMIN"] }, isAdmin ? "관리자 권한을 해제했습니다." : "관리자 권한을 부여했습니다.")}>{isAdmin ? "관리자 해제" : "관리자 지정"}</button><button className="dangerButton" disabled={isRowPending || isAdmin} title={isAdmin ? "관리자 권한을 먼저 해제해 주세요." : "계정 삭제"} onClick={() => setConfirmTarget({ kind: "user", user })}><Trash />삭제</button></span>
             </div>;

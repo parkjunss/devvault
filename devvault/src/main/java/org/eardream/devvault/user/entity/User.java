@@ -121,7 +121,7 @@ public class User implements UserDetails {
         return storageQuotaBytes == null ? DEFAULT_STORAGE_QUOTA_BYTES : storageQuotaBytes;
     }
 
-    public void increaseStorageQuota(long storageQuotaBytes) {
+    public void updateStorageQuota(long storageQuotaBytes) {
         this.storageQuotaBytes = storageQuotaBytes;
     }
 

@@ -56,9 +56,9 @@ public class AdminController {
     }
 
     @PatchMapping("/users/{id}/storage-quota")
-    AdminService.UserSummary increaseStorageQuota(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
-                                                  @RequestBody UpdateStorageQuotaRequest request) {
-        return adminService.increaseStorageQuota(jwt.getSubject(), id, request.quotaBytes());
+    AdminService.UserSummary updateStorageQuota(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
+                                                @RequestBody UpdateStorageQuotaRequest request) {
+        return adminService.updateStorageQuota(jwt.getSubject(), id, request.quotaBytes());
     }
 
     @GetMapping("/files")

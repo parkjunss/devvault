@@ -91,18 +91,36 @@ class AdminServiceTest {
     }
 
     @Test
-    void adminIncreasesUserStorageQuotaAndWritesAuditLog() {
+    void adminReducesUserStorageQuotaDownToCurrentUsage() {
         Fixture fixture = new Fixture();
         User admin = admin(1L, "admin@example.com");
         User target = user(2L, "user@example.com");
         when(fixture.users.findByEmail(admin.getEmail())).thenReturn(Optional.of(admin));
         when(fixture.users.findById(target.getId())).thenReturn(Optional.of(target));
+        when(fixture.files.sumStoredBytes(target.getEmail())).thenReturn(20_000_000_000L);
 
-        AdminService.UserSummary result = fixture.service.increaseStorageQuota(
-                admin.getEmail(), target.getId(), 100_000_000_000L);
+        AdminService.UserSummary result = fixture.service.updateStorageQuota(
+                admin.getEmail(), target.getId(), 20_000_000_000L);
 
-        assertEquals(100_000_000_000L, result.storageQuotaBytes());
+        assertEquals(20_000_000_000L, result.storageQuotaBytes());
+        assertEquals(20_000_000_000L, result.usedBytes());
         verify(fixture.auditLogs).save(any(AdminAuditLog.class));
+    }
+
+    @Test
+    void rejectsStorageQuotaBelowCurrentUsage() {
+        Fixture fixture = new Fixture();
+        User admin = admin(1L, "admin@example.com");
+        User target = user(2L, "user@example.com");
+        when(fixture.users.findByEmail(admin.getEmail())).thenReturn(Optional.of(admin));
+        when(fixture.users.findById(target.getId())).thenReturn(Optional.of(target));
+        when(fixture.files.sumStoredBytes(target.getEmail())).thenReturn(20_000_000_000L);
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> fixture.service.updateStorageQuota(
+                        admin.getEmail(), target.getId(), 19_999_999_999L));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
     }
 
     @Test

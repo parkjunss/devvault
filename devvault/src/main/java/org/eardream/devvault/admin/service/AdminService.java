@@ -58,7 +58,8 @@ public class AdminService {
     @Transactional(readOnly = true)
     public Page<UserSummary> users(String adminEmail, String query, Pageable pageable) {
         currentAdmin(adminEmail);
-        return userRepository.search(normalizeQuery(query), pageable).map(AdminService::toUserSummary);
+        // ponytail: admin pages are capped at 100 rows; use a grouped usage query if that limit grows.
+        return userRepository.search(normalizeQuery(query), pageable).map(this::toUserSummary);
     }
 
     @Transactional
@@ -119,15 +120,17 @@ public class AdminService {
     }
 
     @Transactional
-    public UserSummary increaseStorageQuota(String adminEmail, Long userId, Long quotaBytes) {
+    public UserSummary updateStorageQuota(String adminEmail, Long userId, Long quotaBytes) {
         User admin = currentAdmin(adminEmail);
         User target = userRepository.findById(userId).orElseThrow(AdminService::userNotFound);
         long currentQuota = target.getStorageQuotaBytes();
-        if (quotaBytes == null || quotaBytes <= currentQuota) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "저장소 한도는 현재 값보다 크게 지정해야 합니다.");
+        long usedBytes = storedFileRepository.sumStoredBytes(target.getEmail());
+        if (quotaBytes == null || quotaBytes < usedBytes) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "저장소 한도는 현재 사용량보다 작게 지정할 수 없습니다.");
         }
-        target.increaseStorageQuota(quotaBytes);
-        audit(admin, "INCREASE_STORAGE_QUOTA", "USER", target.getId(), currentQuota + " -> " + quotaBytes);
+        target.updateStorageQuota(quotaBytes);
+        audit(admin, "UPDATE_STORAGE_QUOTA", "USER", target.getId(), currentQuota + " -> " + quotaBytes);
         return toUserSummary(target);
     }
 
@@ -242,9 +245,9 @@ public class AdminService {
         return normalized;
     }
 
-    private static UserSummary toUserSummary(User user) {
+    private UserSummary toUserSummary(User user) {
         return new UserSummary(user.getId(), user.getEmail(), user.getUsername(), user.isEnabled(),
-                rolesOf(user), user.getStorageQuotaBytes());
+                rolesOf(user), user.getStorageQuotaBytes(), storedFileRepository.sumStoredBytes(user.getEmail()));
     }
 
     private static FileSummary toFileSummary(StoredFile file) {
@@ -270,7 +273,7 @@ public class AdminService {
     }
 
     public record UserSummary(Long id, String email, String username, boolean enabled, Set<String> roles,
-                              long storageQuotaBytes) {
+                              long storageQuotaBytes, long usedBytes) {
     }
 
     public record FileSummary(Long id, String ownerEmail, String originalName, String contentType, long size,
