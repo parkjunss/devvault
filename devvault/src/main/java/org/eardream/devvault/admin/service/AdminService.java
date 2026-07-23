@@ -7,6 +7,8 @@ import org.eardream.devvault.auth.repository.RefreshTokenRepository;
 import org.eardream.devvault.file.entity.StoredFile;
 import org.eardream.devvault.file.repository.StoredFileRepository;
 import org.eardream.devvault.file.service.FileStorageService;
+import org.eardream.devvault.fileTag.repository.TagRepository;
+import org.eardream.devvault.folder.repository.FolderRepository;
 import org.eardream.devvault.user.entity.Role;
 import org.eardream.devvault.user.entity.User;
 import org.eardream.devvault.user.entity.UserRole;
@@ -42,6 +44,8 @@ public class AdminService {
     private final UserRoleRepository userRoleRepository;
     private final StoredFileRepository storedFileRepository;
     private final FileStorageService fileStorageService;
+    private final FolderRepository folderRepository;
+    private final TagRepository tagRepository;
     private final AdminAuditLogRepository auditLogRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final OAuthAccountRepository oauthAccountRepository;
@@ -154,6 +158,39 @@ public class AdminService {
         audit(admin, "DELETE_USER", "USER", target.getId(), originalEmail);
         profileImageService.delete(originalEmail);
         target.deleteAccount();
+    }
+
+    @Transactional
+    public void deleteUserPermanently(String adminEmail, Long userId) {
+        User admin = currentAdmin(adminEmail);
+        User target = userRepository.findById(userId).orElseThrow(AdminService::userNotFound);
+        if (!target.isDeleted()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "계정을 먼저 삭제한 뒤 영구 삭제해 주세요.");
+        }
+
+        String email = target.getEmail();
+        var files = storedFileRepository.findAllByOwnerId(target.getId());
+        audit(admin, "PERMANENT_DELETE_USER", "USER", target.getId(),
+                email + ", files=" + files.size());
+        for (StoredFile file : files) {
+            file.softDelete();
+            fileStorageService.deletePermanently(email, file.getId());
+        }
+
+        var folders = folderRepository.findAllByOwnerId(target.getId());
+        folders.forEach(folder -> folder.moveTo(null));
+        folderRepository.flush();
+        folderRepository.deleteAll(folders);
+        folderRepository.flush();
+        tagRepository.deleteAll(tagRepository.findAllByOwnerEmailOrderByNameAsc(email));
+        tagRepository.flush();
+        auditLogRepository.deleteAllByAdminId(target.getId());
+        refreshTokenRepository.deleteAllByUserId(target.getId());
+        oauthAccountRepository.deleteAllByUserId(target.getId());
+        userRoleRepository.deleteAllByUserId(target.getId());
+        userRepository.delete(target);
+        userRepository.flush();
     }
 
     @Transactional(readOnly = true)

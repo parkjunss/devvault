@@ -128,10 +128,16 @@ export default function AdminPage() {
     setNotice("");
     try {
       if (confirmTarget.kind === "user") {
-        const response = await apiFetch(`/api/admin/users/${confirmTarget.user.id}`, { method: "DELETE" });
+        const permanent = !!confirmTarget.user.deletedAt;
+        const response = await apiFetch(
+          `/api/admin/users/${confirmTarget.user.id}${permanent ? "/permanent" : ""}`,
+          { method: "DELETE" }
+        );
         if (!response.ok) throw new Error(await response.text());
         await Promise.all([loadUsers(userQuery), loadDashboard()]);
-        setNotice("사용자 계정을 삭제하고 로그인 정보를 폐기했습니다. 저장 파일은 유지됩니다.");
+        setNotice(permanent
+          ? "사용자와 소유 파일을 영구 삭제했습니다."
+          : "사용자 계정을 삭제하고 로그인 정보를 폐기했습니다. 저장 파일은 유지됩니다.");
       } else {
         const endpoint = confirmTarget.permanent
           ? "/api/admin/files/bulk-permanent-delete"
@@ -146,7 +152,7 @@ export default function AdminPage() {
       }
       setConfirmTarget(null);
     } catch {
-      setNotice(confirmTarget.kind === "user" ? "계정을 삭제하지 못했습니다. 관리자 권한을 먼저 해제해 주세요." : "선택한 파일을 삭제하지 못했습니다.");
+      setNotice(confirmTarget.kind === "user" ? "계정을 삭제하지 못했습니다. 계정 상태와 관리자 권한을 확인해 주세요." : "선택한 파일을 삭제하지 못했습니다.");
     } finally { setConfirming(false); }
   }
 
@@ -175,7 +181,7 @@ export default function AdminPage() {
               <span className={`statusBadge ${user.enabled && !isDeleted ? "enabled" : "disabled"}`}>{isDeleted ? "삭제됨" : user.enabled ? "활성" : "비활성"}</span>
               <span className="quotaControl"><input disabled={isDeleted} type="number" min={user.usedBytes / 1_000_000_000} step="0.1" value={quotaInputs[user.id] ?? ""} onChange={event => setQuotaInputs(inputs => ({ ...inputs, [user.id]: event.target.value }))} aria-label={`${user.email} 저장 용량 GB`} /><small>GB</small><button disabled={isRowPending || isDeleted} onClick={() => updateQuota(user)}>적용</button><em>사용 {formatStorage(user.usedBytes)} / 한도 {formatStorage(user.storageQuotaBytes)}</em></span>
               <span className={`roleBadge ${isAdmin ? "admin" : ""}`}>{isDeleted ? "삭제 계정" : isAdmin ? "관리자" : "사용자"}</span>
-              <span className="adminRowActions"><button disabled={isRowPending || isDeleted} onClick={() => updateUser(user, { enabled: !user.enabled }, user.enabled ? "사용자를 비활성화했습니다." : "사용자를 활성화했습니다.")}>{user.enabled ? "비활성화" : "활성화"}</button><button disabled={isRowPending || isDeleted} onClick={() => updateUser(user, { roles: isAdmin ? ["ROLE_USER"] : ["ROLE_USER", "ROLE_ADMIN"] }, isAdmin ? "관리자 권한을 해제했습니다." : "관리자 권한을 부여했습니다.")}>{isAdmin ? "관리자 해제" : "관리자 지정"}</button><button className="dangerButton" disabled={isRowPending || isAdmin || isDeleted} title={isDeleted ? "이미 삭제된 계정입니다." : isAdmin ? "관리자 권한을 먼저 해제해 주세요." : "계정 삭제"} onClick={() => setConfirmTarget({ kind: "user", user })}><Trash />{isDeleted ? "삭제됨" : "삭제"}</button></span>
+              <span className="adminRowActions"><button disabled={isRowPending || isDeleted} onClick={() => updateUser(user, { enabled: !user.enabled }, user.enabled ? "사용자를 비활성화했습니다." : "사용자를 활성화했습니다.")}>{user.enabled ? "비활성화" : "활성화"}</button><button disabled={isRowPending || isDeleted} onClick={() => updateUser(user, { roles: isAdmin ? ["ROLE_USER"] : ["ROLE_USER", "ROLE_ADMIN"] }, isAdmin ? "관리자 권한을 해제했습니다." : "관리자 권한을 부여했습니다.")}>{isAdmin ? "관리자 해제" : "관리자 지정"}</button><button className="dangerButton" disabled={isRowPending || isAdmin} title={isAdmin ? "관리자 권한을 먼저 해제해 주세요." : isDeleted ? "사용자와 소유 파일 영구 삭제" : "계정 삭제"} onClick={() => setConfirmTarget({ kind: "user", user })}><Trash />{isDeleted ? "영구 삭제" : "삭제"}</button></span>
             </div>;
           })}
           {!users.length && <div className="stateMessage">검색된 사용자가 없습니다.</div>}
@@ -195,9 +201,9 @@ export default function AdminPage() {
 
     {confirmTarget && <div className="modalBackdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && !confirming) setConfirmTarget(null); }}>
       <section className="actionDialog" role="dialog" aria-modal="true" aria-labelledby="delete-title">
-        <header><h2 id="delete-title">{confirmTarget.kind === "user" ? "사용자 계정을 삭제할까요?" : confirmTarget.permanent ? `${confirmTarget.ids.length}개 파일을 영구 삭제할까요?` : `${confirmTarget.ids.length}개 파일을 삭제할까요?`}</h2><button className="iconButton" disabled={confirming} onClick={() => setConfirmTarget(null)} aria-label="닫기"><X /></button></header>
-        {confirmTarget.kind === "user" ? <p><strong>{confirmTarget.user.email}</strong>의 로그인·OAuth·권한 정보가 폐기되고 계정이 익명화됩니다. 사용자가 보관한 파일과 감사 기록은 유지됩니다.</p> : confirmTarget.permanent ? <p>선택한 휴지통 파일을 저장소에서도 제거합니다. <strong>이 작업은 되돌릴 수 없습니다.</strong></p> : <p>선택한 파일은 소유자의 <strong>휴지통</strong>으로 이동합니다. 영구 삭제가 아니므로 복원할 수 있습니다.</p>}
-        <footer><button className="secondaryButton" disabled={confirming} onClick={() => setConfirmTarget(null)}>취소</button><button className="dangerButton" disabled={confirming} onClick={confirmDelete}>{confirming ? "처리 중..." : confirmTarget.kind === "files" && confirmTarget.permanent ? "영구 삭제" : "삭제"}</button></footer>
+        <header><h2 id="delete-title">{confirmTarget.kind === "user" ? confirmTarget.user.deletedAt ? "사용자를 영구 삭제할까요?" : "사용자 계정을 삭제할까요?" : confirmTarget.permanent ? `${confirmTarget.ids.length}개 파일을 영구 삭제할까요?` : `${confirmTarget.ids.length}개 파일을 삭제할까요?`}</h2><button className="iconButton" disabled={confirming} onClick={() => setConfirmTarget(null)} aria-label="닫기"><X /></button></header>
+        {confirmTarget.kind === "user" ? confirmTarget.user.deletedAt ? <p><strong>{confirmTarget.user.email}</strong> 계정과 소유한 모든 파일을 저장소에서도 제거합니다. <strong>이 작업은 되돌릴 수 없습니다.</strong></p> : <p><strong>{confirmTarget.user.email}</strong>의 로그인·OAuth·권한 정보가 폐기되고 계정이 익명화됩니다. 사용자가 보관한 파일과 감사 기록은 유지됩니다.</p> : confirmTarget.permanent ? <p>선택한 휴지통 파일을 저장소에서도 제거합니다. <strong>이 작업은 되돌릴 수 없습니다.</strong></p> : <p>선택한 파일은 소유자의 <strong>휴지통</strong>으로 이동합니다. 영구 삭제가 아니므로 복원할 수 있습니다.</p>}
+        <footer><button className="secondaryButton" disabled={confirming} onClick={() => setConfirmTarget(null)}>취소</button><button className="dangerButton" disabled={confirming} onClick={confirmDelete}>{confirming ? "처리 중..." : confirmTarget.kind === "files" ? confirmTarget.permanent ? "영구 삭제" : "삭제" : confirmTarget.user.deletedAt ? "영구 삭제" : "삭제"}</button></footer>
       </section>
     </div>}
   </main>;

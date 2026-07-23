@@ -55,6 +55,12 @@ public class AdminController {
         return ResponseEntity.noContent().build();
     }
 
+    @DeleteMapping("/users/{id}/permanent")
+    ResponseEntity<Void> deleteUserPermanently(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
+        adminService.deleteUserPermanently(jwt.getSubject(), id);
+        return ResponseEntity.noContent().build();
+    }
+
     @PatchMapping("/users/{id}/storage-quota")
     AdminService.UserSummary updateStorageQuota(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
                                                 @RequestBody UpdateStorageQuotaRequest request) {

@@ -8,9 +8,12 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface StoredFileRepository extends JpaRepository<StoredFile, Long> {
+    List<StoredFile> findAllByOwnerId(Long ownerId);
+
     Page<StoredFile> findAllByOwnerEmailAndDeletedAtIsNull(String email, Pageable pageable);
 
     Page<StoredFile> findAllByOwnerEmailAndFolderIdAndDeletedAtIsNull(String email, Long folderId, Pageable pageable);

@@ -7,6 +7,8 @@ import org.eardream.devvault.auth.repository.RefreshTokenRepository;
 import org.eardream.devvault.file.entity.StoredFile;
 import org.eardream.devvault.file.repository.StoredFileRepository;
 import org.eardream.devvault.file.service.FileStorageService;
+import org.eardream.devvault.fileTag.repository.TagRepository;
+import org.eardream.devvault.folder.repository.FolderRepository;
 import org.eardream.devvault.user.entity.Role;
 import org.eardream.devvault.user.entity.User;
 import org.eardream.devvault.user.entity.UserRole;
@@ -158,6 +160,27 @@ class AdminServiceTest {
     }
 
     @Test
+    void permanentlyDeletesSoftDeletedUserAndOwnedFiles() {
+        Fixture fixture = new Fixture();
+        User admin = admin(1L, "admin@example.com");
+        User target = user(2L, "user@example.com");
+        target.deleteAccount();
+        StoredFile file = StoredFile.builder().id(9L).owner(target).originalName("a.txt").build();
+        when(fixture.users.findByEmail(admin.getEmail())).thenReturn(Optional.of(admin));
+        when(fixture.users.findById(target.getId())).thenReturn(Optional.of(target));
+        when(fixture.files.findAllByOwnerId(target.getId())).thenReturn(List.of(file));
+        when(fixture.folders.findAllByOwnerId(target.getId())).thenReturn(List.of());
+        when(fixture.tags.findAllByOwnerEmailOrderByNameAsc(target.getEmail())).thenReturn(List.of());
+
+        fixture.service.deleteUserPermanently(admin.getEmail(), target.getId());
+
+        assertTrue(file.isDeleted());
+        verify(fixture.fileStorage).deletePermanently(target.getEmail(), file.getId());
+        verify(fixture.auditLogs).deleteAllByAdminId(target.getId());
+        verify(fixture.users).delete(target);
+    }
+
+    @Test
     void bulkDeletesActiveFiles() {
         Fixture fixture = new Fixture();
         User admin = admin(1L, "admin@example.com");
@@ -245,13 +268,15 @@ class AdminServiceTest {
         final UserRoleRepository userRoles = mock(UserRoleRepository.class);
         final StoredFileRepository files = mock(StoredFileRepository.class);
         final FileStorageService fileStorage = mock(FileStorageService.class);
+        final FolderRepository folders = mock(FolderRepository.class);
+        final TagRepository tags = mock(TagRepository.class);
         final AdminAuditLogRepository auditLogs = mock(AdminAuditLogRepository.class);
         final RefreshTokenRepository refreshTokens = mock(RefreshTokenRepository.class);
         final OAuthAccountRepository oauthAccounts = mock(OAuthAccountRepository.class);
         final ProfileImageService profileImages = mock(ProfileImageService.class);
         final HealthEndpoint health = mock(HealthEndpoint.class);
         final AdminService service = new AdminService(
-                users, roles, userRoles, files, fileStorage, auditLogs, refreshTokens, oauthAccounts, profileImages,
-                health);
+                users, roles, userRoles, files, fileStorage, folders, tags, auditLogs, refreshTokens, oauthAccounts,
+                profileImages, health);
     }
 }
