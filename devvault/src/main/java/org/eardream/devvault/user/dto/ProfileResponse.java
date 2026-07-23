@@ -8,9 +8,9 @@ public record ProfileResponse(
         boolean hasProfileImage,
         boolean passwordLoginEnabled
 ) {
-    public static ProfileResponse from(User user) {
+    public static ProfileResponse from(User user, boolean passwordLoginEnabled) {
         return new ProfileResponse(user.getUsername(), user.getEmail(),
                 user.getUserImage() != null && !user.getUserImage().isBlank(),
-                user.isPasswordLoginEnabled());
+                passwordLoginEnabled);
     }
 }
