@@ -17,21 +17,25 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByEmail(String email);
 
-    long countByEnabledTrue();
+    long countByDeletedAtIsNull();
+
+    long countByEnabledTrueAndDeletedAtIsNull();
 
     @Query("""
             select user from User user
-            where :query is null
+            where user.deletedAt is null
+              and (:query is null
                or locate(:query, lower(user.email)) > 0
-               or locate(:query, lower(user.username)) > 0
+               or locate(:query, lower(user.username)) > 0)
             """)
     Page<User> search(@Param("query") String query, Pageable pageable);
 
     @EntityGraph(attributePaths = {"userRoles", "userRoles.role"})
-    Optional<User> findByEmail(String email);
+    @Query("select user from User user where user.email = :email and user.deletedAt is null")
+    Optional<User> findByEmail(@Param("email") String email);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select user from User user where user.email = :email")
+    @Query("select user from User user where user.email = :email and user.deletedAt is null")
     Optional<User> findByEmailForUpdate(@Param("email") String email);
 
     @Override

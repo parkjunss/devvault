@@ -30,10 +30,12 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
+    private final EmailDomainValidator emailDomainValidator;
 
     @Transactional
     public AuthToken signup(String email, String password, String username) {
         String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
+        emailDomainValidator.validate(normalizedEmail);
         if (userRepository.existsByEmail(normalizedEmail)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 사용 중인 이메일입니다.");
         }

@@ -12,6 +12,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,6 +20,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Set;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -44,6 +49,12 @@ public class AdminController {
         return adminService.updateUser(jwt.getSubject(), id, request.enabled(), request.roles());
     }
 
+    @DeleteMapping("/users/{id}")
+    ResponseEntity<Void> deleteUser(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
+        adminService.deleteUser(jwt.getSubject(), id);
+        return ResponseEntity.noContent().build();
+    }
+
     @PatchMapping("/users/{id}/storage-quota")
     AdminService.UserSummary increaseStorageQuota(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
                                                   @RequestBody UpdateStorageQuotaRequest request) {
@@ -64,6 +75,12 @@ public class AdminController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/files/bulk-delete")
+    BulkDeleteResponse deleteFiles(@AuthenticationPrincipal Jwt jwt,
+                                   @Valid @RequestBody BulkDeleteRequest request) {
+        return new BulkDeleteResponse(adminService.deleteFiles(jwt.getSubject(), request.fileIds()));
+    }
+
     @GetMapping("/audit-logs")
     Page<AdminService.AuditLogSummary> auditLogs(@AuthenticationPrincipal Jwt jwt,
                                                  @PageableDefault(size = 20, sort = "createdAt",
@@ -75,5 +92,11 @@ public class AdminController {
     }
 
     public record UpdateStorageQuotaRequest(Long quotaBytes) {
+    }
+
+    public record BulkDeleteRequest(@NotEmpty @Size(max = 100) Set<@Positive Long> fileIds) {
+    }
+
+    public record BulkDeleteResponse(int deletedCount) {
     }
 }

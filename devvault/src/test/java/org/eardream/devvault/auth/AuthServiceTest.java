@@ -5,6 +5,7 @@ import org.eardream.devvault.auth.dto.AuthToken;
 import org.eardream.devvault.auth.service.AuthService;
 import org.eardream.devvault.auth.service.JwtService;
 import org.eardream.devvault.auth.service.RefreshTokenService;
+import org.eardream.devvault.auth.service.EmailDomainValidator;
 import org.eardream.devvault.user.entity.Role;
 import org.eardream.devvault.user.entity.User;
 import org.eardream.devvault.user.repository.RoleRepository;
@@ -43,6 +44,8 @@ class AuthServiceTest {
     JwtService jwtService;
     @Mock
     RefreshTokenService refreshTokenService;
+    @Mock
+    EmailDomainValidator emailDomainValidator;
     @InjectMocks
     AuthService authService;
 

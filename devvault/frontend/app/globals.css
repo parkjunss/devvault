@@ -357,6 +357,19 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .quotaControl button:hover, .adminRowActions button:hover { border-color: var(--accent); color: var(--accent); }
 .quotaControl button:disabled, .adminRowActions button:disabled { opacity: .5; cursor: wait; }
 .adminRowActions { display: flex; gap: 6px; }
+.adminRowActions .dangerButton { border-color: #e6bcbc; color: var(--danger); background: #fff7f7; }
+.adminGlobalNotice { margin-top: 18px; border: 1px solid #d7e9e4; border-radius: 8px; }
+.adminFiles { overflow-x: auto; }
+.adminBulkBar { min-width: 760px; min-height: 58px; padding: 10px 22px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; background: #fafcfb; }
+.adminBulkBar span { color: var(--muted); font-size: 12px; }
+.adminBulkBar .dangerButton { min-height: 36px; padding: 0 13px; font-size: 12px; }
+.adminFileTable { min-width: 760px; }
+.adminFileHead, .adminFileRow { display: grid; grid-template-columns: 28px minmax(220px,1.3fr) minmax(180px,1fr) minmax(150px,.7fr) 90px; align-items: center; gap: 12px; padding: 0 22px; }
+.adminFileHead { min-height: 42px; border-bottom: 1px solid var(--line); color: var(--muted); background: #fafcfb; font-size: 11px; }
+.adminFileRow { min-height: 58px; border-bottom: 1px solid #edf0ef; color: #53605d; font-size: 11px; }
+.adminFileRow strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #293431; font-size: 12px; }
+.adminFileRow span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adminFileHead input, .adminFileRow input { width: 16px; height: 16px; accent-color: var(--accent); }
 
 @media (max-width: 920px) {
   .adminStats { grid-template-columns: repeat(2,1fr); }

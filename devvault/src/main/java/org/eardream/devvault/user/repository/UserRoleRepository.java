@@ -6,6 +6,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface UserRoleRepository extends JpaRepository<UserRole, Long> {
+    void deleteAllByUserId(Long userId);
+
     long countByRoleRole(String role);
 
     @Query("""

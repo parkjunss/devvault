@@ -10,8 +10,10 @@ import org.eardream.devvault.user.entity.Role;
 import org.eardream.devvault.user.entity.User;
 import org.eardream.devvault.user.entity.UserRole;
 import org.eardream.devvault.user.repository.RoleRepository;
+import org.eardream.devvault.user.repository.OAuthAccountRepository;
 import org.eardream.devvault.user.repository.UserRepository;
 import org.eardream.devvault.user.repository.UserRoleRepository;
+import org.eardream.devvault.user.service.ProfileImageService;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.health.actuate.endpoint.CompositeHealthDescriptor;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
@@ -20,6 +22,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Optional;
+import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -118,14 +121,48 @@ class AdminServiceTest {
     }
 
     @Test
+    void deletesNonAdminAccountAndRevokesAccess() {
+        Fixture fixture = new Fixture();
+        User admin = admin(1L, "admin@example.com");
+        User target = user(2L, "user@example.com");
+        when(fixture.users.findByEmail(admin.getEmail())).thenReturn(Optional.of(admin));
+        when(fixture.users.findById(target.getId())).thenReturn(Optional.of(target));
+
+        fixture.service.deleteUser(admin.getEmail(), target.getId());
+
+        assertTrue(target.isDeleted());
+        verify(fixture.profileImages).delete("user@example.com");
+        verify(fixture.refreshTokens).deleteAllByUserId(target.getId());
+        verify(fixture.oauthAccounts).deleteAllByUserId(target.getId());
+        verify(fixture.userRoles).deleteAllByUserId(target.getId());
+        verify(fixture.auditLogs).save(any(AdminAuditLog.class));
+    }
+
+    @Test
+    void bulkDeletesActiveFiles() {
+        Fixture fixture = new Fixture();
+        User admin = admin(1L, "admin@example.com");
+        StoredFile first = StoredFile.builder().id(9L).owner(user(2L, "user@example.com")).originalName("a.txt").build();
+        StoredFile second = StoredFile.builder().id(10L).owner(user(2L, "user@example.com")).originalName("b.txt").build();
+        when(fixture.users.findByEmail(admin.getEmail())).thenReturn(Optional.of(admin));
+        when(fixture.files.findAllById(Set.of(9L, 10L))).thenReturn(List.of(first, second));
+
+        int deleted = fixture.service.deleteFiles(admin.getEmail(), Set.of(9L, 10L));
+
+        assertEquals(2, deleted);
+        assertTrue(first.isDeleted());
+        assertTrue(second.isDeleted());
+    }
+
+    @Test
     void returnsAdminDashboardTotalsAndHealth() {
         Fixture fixture = new Fixture();
         User admin = admin(1L, "admin@example.com");
         StoredFileRepository.UsageSummary usage = mock(StoredFileRepository.UsageSummary.class);
         CompositeHealthDescriptor health = mock(CompositeHealthDescriptor.class);
         when(fixture.users.findByEmail(admin.getEmail())).thenReturn(Optional.of(admin));
-        when(fixture.users.count()).thenReturn(5L);
-        when(fixture.users.countByEnabledTrue()).thenReturn(4L);
+        when(fixture.users.countByDeletedAtIsNull()).thenReturn(5L);
+        when(fixture.users.countByEnabledTrueAndDeletedAtIsNull()).thenReturn(4L);
         when(usage.getFileCount()).thenReturn(12L);
         when(usage.getUsedBytes()).thenReturn(4096L);
         when(fixture.files.summarizeAllUsage()).thenReturn(usage);
@@ -170,8 +207,10 @@ class AdminServiceTest {
         final StoredFileRepository files = mock(StoredFileRepository.class);
         final AdminAuditLogRepository auditLogs = mock(AdminAuditLogRepository.class);
         final RefreshTokenRepository refreshTokens = mock(RefreshTokenRepository.class);
+        final OAuthAccountRepository oauthAccounts = mock(OAuthAccountRepository.class);
+        final ProfileImageService profileImages = mock(ProfileImageService.class);
         final HealthEndpoint health = mock(HealthEndpoint.class);
         final AdminService service = new AdminService(
-                users, roles, userRoles, files, auditLogs, refreshTokens, health);
+                users, roles, userRoles, files, auditLogs, refreshTokens, oauthAccounts, profileImages, health);
     }
 }

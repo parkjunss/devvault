@@ -9,6 +9,8 @@ import java.util.Optional;
 @Repository
 public interface OAuthAccountRepository extends JpaRepository<OauthAccount,Long> {
 
+    void deleteAllByUserId(Long userId);
+
     Optional<OauthAccount> findByProviderAndProviderUserId(
             String provider,
             String providerUserId

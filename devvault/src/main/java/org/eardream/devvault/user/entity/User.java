@@ -49,6 +49,9 @@ public class User implements UserDetails {
     @Builder.Default
     private boolean enabled = true;
 
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
     @OneToMany(mappedBy = "user")
     @Builder.Default
     private List<UserRole> userRoles = new ArrayList<>();
@@ -105,5 +108,23 @@ public class User implements UserDetails {
 
     public void increaseStorageQuota(long storageQuotaBytes) {
         this.storageQuotaBytes = storageQuotaBytes;
+    }
+
+    public boolean isDeleted() {
+        return deletedAt != null;
+    }
+
+    public void deleteAccount() {
+        if (deletedAt != null) {
+            return;
+        }
+        String suffix = id == null ? java.util.UUID.randomUUID().toString().substring(0, 12) : id.toString();
+        email = "deleted-" + suffix + "@deleted.invalid";
+        username = "deleted-" + suffix;
+        password = java.util.UUID.randomUUID().toString();
+        userImage = null;
+        enabled = false;
+        deletedAt = Instant.now();
+        userRoles.clear();
     }
 }

@@ -10,8 +10,10 @@ import org.eardream.devvault.user.entity.Role;
 import org.eardream.devvault.user.entity.User;
 import org.eardream.devvault.user.entity.UserRole;
 import org.eardream.devvault.user.repository.RoleRepository;
+import org.eardream.devvault.user.repository.OAuthAccountRepository;
 import org.eardream.devvault.user.repository.UserRepository;
 import org.eardream.devvault.user.repository.UserRoleRepository;
+import org.eardream.devvault.user.service.ProfileImageService;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -40,13 +42,16 @@ public class AdminService {
     private final StoredFileRepository storedFileRepository;
     private final AdminAuditLogRepository auditLogRepository;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final OAuthAccountRepository oauthAccountRepository;
+    private final ProfileImageService profileImageService;
     private final HealthEndpoint healthEndpoint;
 
     @Transactional(readOnly = true)
     public DashboardSummary dashboard(String adminEmail) {
         currentAdmin(adminEmail);
         StoredFileRepository.UsageSummary usage = storedFileRepository.summarizeAllUsage();
-        return new DashboardSummary(userRepository.count(), userRepository.countByEnabledTrue(),
+        return new DashboardSummary(userRepository.countByDeletedAtIsNull(),
+                userRepository.countByEnabledTrueAndDeletedAtIsNull(),
                 usage.getFileCount(), usage.getUsedBytes(), healthEndpoint.health().getStatus().getCode());
     }
 
@@ -126,6 +131,26 @@ public class AdminService {
         return toUserSummary(target);
     }
 
+    @Transactional
+    public void deleteUser(String adminEmail, Long userId) {
+        User admin = currentAdmin(adminEmail);
+        User target = userRepository.findById(userId)
+                .filter(user -> !user.isDeleted())
+                .orElseThrow(AdminService::userNotFound);
+        if (rolesOf(target).contains(ROLE_ADMIN)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "관리자 권한을 먼저 해제한 뒤 계정을 삭제해 주세요.");
+        }
+
+        String originalEmail = target.getEmail();
+        refreshTokenRepository.deleteAllByUserId(target.getId());
+        oauthAccountRepository.deleteAllByUserId(target.getId());
+        userRoleRepository.deleteAllByUserId(target.getId());
+        audit(admin, "DELETE_USER", "USER", target.getId(), originalEmail);
+        profileImageService.delete(originalEmail);
+        target.deleteAccount();
+    }
+
     @Transactional(readOnly = true)
     public Page<FileSummary> files(String adminEmail, String query, Pageable pageable) {
         currentAdmin(adminEmail);
@@ -140,6 +165,27 @@ public class AdminService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "파일을 찾을 수 없습니다."));
         file.softDelete();
         audit(admin, "DELETE_FILE", "FILE", file.getId(), file.getOwner().getEmail() + ":" + file.getOriginalName());
+    }
+
+    @Transactional
+    public int deleteFiles(String adminEmail, Set<Long> fileIds) {
+        User admin = currentAdmin(adminEmail);
+        if (fileIds == null || fileIds.isEmpty() || fileIds.size() > 100
+                || fileIds.stream().anyMatch(java.util.Objects::isNull)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "삭제할 파일을 1개 이상 100개 이하로 선택해 주세요.");
+        }
+        int deleted = 0;
+        for (StoredFile file : storedFileRepository.findAllById(fileIds)) {
+            if (file.isDeleted()) {
+                continue;
+            }
+            file.softDelete();
+            audit(admin, "DELETE_FILE", "FILE", file.getId(),
+                    file.getOwner().getEmail() + ":" + file.getOriginalName());
+            deleted++;
+        }
+        return deleted;
     }
 
     @Transactional(readOnly = true)

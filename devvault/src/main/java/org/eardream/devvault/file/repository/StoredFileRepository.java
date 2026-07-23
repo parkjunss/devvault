@@ -69,9 +69,10 @@ public interface StoredFileRepository extends JpaRepository<StoredFile, Long> {
 
     @Query("""
             select file from StoredFile file
-            where :query is null
+            where file.deletedAt is null
+              and (:query is null
                or locate(:query, lower(file.originalName)) > 0
-               or locate(:query, lower(file.owner.email)) > 0
+               or locate(:query, lower(file.owner.email)) > 0)
             """)
     Page<StoredFile> searchAll(@Param("query") String query, Pageable pageable);
 
