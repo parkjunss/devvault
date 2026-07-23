@@ -120,6 +120,9 @@ export function VaultApp() {
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
   const [uploadProgress, setUploadProgress] = useState<{ name: string; loaded: number; total: number } | null>(null);
+  // ponytail: upload failures are session-local; persist server-side if notification history becomes necessary.
+  const [uploadFailure, setUploadFailure] = useState<string | null>(null);
+  const [notificationOpen, setNotificationOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [isAdmin] = useState(() => tokenHasRole("ROLE_ADMIN"));
   const [openFileMenuId, setOpenFileMenuId] = useState<number | null>(null);
@@ -225,6 +228,7 @@ export function VaultApp() {
     const closePopovers = () => {
       setOpenFileMenuId(null);
       setOpenFolderMenuId(null);
+      setNotificationOpen(false);
     };
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -278,6 +282,13 @@ export function VaultApp() {
 
   const recent = useMemo(() => files.slice().sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)).slice(0, 3), [files]);
   const usedPercent = Math.min(100, Math.max(0, (dashboard.usedBytes / dashboard.quotaBytes) * 100));
+  const storageAlert = usedPercent >= 80
+    ? {
+        title: usedPercent >= 100 ? "저장소가 가득 찼습니다." : usedPercent >= 95 ? "저장소가 거의 가득 찼습니다." : "저장소 사용량이 높습니다.",
+        detail: `${formatStorage(dashboard.usedBytes)} / ${formatStorage(dashboard.quotaBytes)} (${usedPercent.toFixed(1)}%)`
+      }
+    : null;
+  const notificationCount = Number(!!storageAlert) + Number(!!uploadFailure);
   const uploadPercent = uploadProgress
     ? Math.min(100, Math.round((uploadProgress.loaded / Math.max(uploadProgress.total, 1)) * 100))
     : 0;
@@ -310,6 +321,7 @@ export function VaultApp() {
       notify("업로드가 완료되었습니다.");
       await load();
     } catch {
+      setUploadFailure(file.name);
       notify("업로드에 실패했습니다.");
     } finally {
       setUploadProgress(null);
@@ -523,8 +535,16 @@ export function VaultApp() {
           <kbd>⌘ K</kbd>
         </div>
         <div className="profileArea">
-          <button className="iconButton" aria-label="알림"><Bell /></button>
-          <button className="profileButton" onClick={() => setProfileOpen(!profileOpen)} aria-expanded={profileOpen}>
+          <div className="notificationWrap" onClick={event => event.stopPropagation()}>
+            <button className={`iconButton ${notificationOpen ? "active" : ""}`} aria-label="알림 목록" aria-expanded={notificationOpen} onClick={() => { setProfileOpen(false); setNotificationOpen(open => !open); }}><Bell />{notificationCount > 0 && <span className="notificationBadge">{notificationCount}</span>}</button>
+            {notificationOpen && <section className="notificationPanel" aria-label="중요 알림">
+              <header><strong>알림</strong><span>{notificationCount}</span></header>
+              {storageAlert && <article className="notificationItem warning"><strong>{storageAlert.title}</strong><span>{storageAlert.detail}</span></article>}
+              {uploadFailure && <article className="notificationItem error"><strong>업로드에 실패했습니다.</strong><span>{uploadFailure}</span><button onClick={() => setUploadFailure(null)}>지우기</button></article>}
+              {!notificationCount && <p>새로운 중요 알림이 없습니다.</p>}
+            </section>}
+          </div>
+          <button className="profileButton" onClick={() => { setNotificationOpen(false); setProfileOpen(!profileOpen); }} aria-expanded={profileOpen}>
             {profileImageUrl ? <Image unoptimized src={profileImageUrl} alt="프로필 사진" width={36} height={36} /> : <UserCircle className="profileAvatar" size={36} weight="duotone" aria-hidden="true" />}
             <span>{user}</span><CaretDown />
           </button>

@@ -50,6 +50,20 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .profileMenu { position: absolute; top: 48px; right: 24px; width: 150px; padding: 7px; background: #fff; border: 1px solid var(--line); border-radius: 9px; box-shadow: 0 10px 28px rgba(18,32,29,.12); z-index: 30; }
 .profileMenu button, .profileMenu a { width: 100%; border: 0; background: transparent; padding: 9px 10px; display: flex; gap: 8px; align-items: center; border-radius: 6px; cursor: pointer; color: inherit; text-decoration: none; font-size: 13px; }
 .profileMenu button:hover, .profileMenu a:hover { background: var(--soft); }
+.notificationWrap { position: relative; }
+.notificationWrap .iconButton { position: relative; }
+.notificationBadge { position: absolute; top: 2px; right: 2px; min-width: 16px; height: 16px; padding: 0 4px; border: 2px solid #fff; border-radius: 99px; display: grid; place-items: center; color: #fff; background: var(--danger); font-size: 9px; font-weight: 800; }
+.notificationPanel { position: absolute; top: 46px; right: 0; z-index: 30; width: 310px; padding: 8px; border: 1px solid var(--line); border-radius: 9px; background: #fff; box-shadow: 0 12px 34px rgba(18,32,29,.14); }
+.notificationPanel > header { padding: 8px 9px 10px; display: flex; justify-content: space-between; font-size: 13px; }
+.notificationPanel > header span { color: var(--muted); }
+.notificationPanel > p { margin: 0; padding: 20px 10px; color: var(--muted); text-align: center; font-size: 12px; }
+.notificationItem { margin-bottom: 6px; padding: 11px; border-radius: 7px; display: grid; gap: 4px; background: var(--soft); }
+.notificationItem:last-child { margin-bottom: 0; }
+.notificationItem strong { font-size: 12px; }
+.notificationItem span { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.notificationItem.warning { background: #fff6df; }
+.notificationItem.error { background: #faecec; }
+.notificationItem button { width: fit-content; margin-top: 3px; padding: 0; border: 0; color: var(--danger); background: transparent; cursor: pointer; font-size: 11px; font-weight: 700; }
 
 .sidebar { grid-column: 1; padding: 26px 14px 20px; border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: calc(100vh - 68px); }
 .sidebar nav, .folderNav { display: grid; gap: 4px; }
