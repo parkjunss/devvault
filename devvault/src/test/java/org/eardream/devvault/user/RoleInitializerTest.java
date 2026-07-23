@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Optional;
 
@@ -28,6 +29,8 @@ class RoleInitializerTest {
     private UserRepository userRepository;
     @Mock
     private UserRoleRepository userRoleRepository;
+    @Mock
+    private PasswordEncoder passwordEncoder;
 
     @Test
     void createsOnlyMissingRoles() {
@@ -72,7 +75,31 @@ class RoleInitializerTest {
         verify(userRoleRepository, never()).save(any());
     }
 
+    @Test
+    void createsConfiguredAdminAccountWithBothRoles() {
+        Role userRole = new Role("ROLE_USER");
+        Role adminRole = new Role("ROLE_ADMIN");
+        when(roleRepository.findByRole("ROLE_USER")).thenReturn(Optional.of(userRole));
+        when(roleRepository.findByRole("ROLE_ADMIN")).thenReturn(Optional.of(adminRole));
+        when(userRepository.findByEmail("admin@example.com")).thenReturn(Optional.empty());
+        when(passwordEncoder.encode("secure-password")).thenReturn("encoded-password");
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(userRoleRepository.save(any(UserRole.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        initializer(" Admin@Example.com ", "secure-password", "관리자").run(null);
+
+        verify(userRepository).save(argThat(user -> user.getEmail().equals("admin@example.com")
+                && user.getPassword().equals("encoded-password") && user.getUsername().equals("관리자")));
+        verify(userRoleRepository).save(argThat(userRoleLink -> userRoleLink.getRole().equals(userRole)));
+        verify(userRoleRepository).save(argThat(userRoleLink -> userRoleLink.getRole().equals(adminRole)));
+    }
+
     private RoleInitializer initializer(String adminEmail) {
-        return new RoleInitializer(roleRepository, userRepository, userRoleRepository, adminEmail);
+        return initializer(adminEmail, "", "관리자");
+    }
+
+    private RoleInitializer initializer(String adminEmail, String adminPassword, String adminUsername) {
+        return new RoleInitializer(roleRepository, userRepository, userRoleRepository, passwordEncoder,
+                adminEmail, adminPassword, adminUsername);
     }
 }

@@ -320,6 +320,56 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .passwordCard > header p { margin: 0; color: var(--muted); font-size: 13px; }
 .passwordForm { padding-top: 0; border-top: 0; }
 
+.adminPage { min-height: 100vh; background: #f5f8f7; }
+.adminContent { width: min(100% - 48px,1180px); margin: 0 auto; padding: 55px 0 90px; }
+.adminContent > header h1 { margin: 7px 0 8px; font-size: 38px; letter-spacing: -1.5px; }
+.adminContent > header > p:last-child { margin: 0; color: var(--muted); }
+.adminStats { margin-top: 28px; display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; }
+.adminStats article { min-height: 132px; padding: 21px; border: 1px solid var(--line); border-radius: 10px; display: grid; grid-template: auto auto / 1fr auto; gap: 9px; background: #fff; }
+.adminStats article > svg { color: var(--accent); font-size: 25px; }
+.adminStats article span { grid-column: 1; color: var(--muted); font-size: 12px; }
+.adminStats article strong { grid-column: 1 / -1; font-size: 25px; }
+.adminStats article small { grid-column: 2; grid-row: 1; color: var(--accent); font-size: 10px; text-transform: uppercase; }
+.adminUsers { margin-top: 22px; border: 1px solid var(--line); border-radius: 11px; background: #fff; overflow: hidden; }
+.adminUsersHeader { min-height: 86px; padding: 18px 22px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line); }
+.adminUsersHeader h2 { margin: 0 0 4px; font-size: 19px; }
+.adminUsersHeader span { color: var(--muted); font-size: 11px; }
+.adminUsersHeader form { width: min(100%,340px); height: 40px; border: 1px solid #d6dcda; border-radius: 7px; display: flex; align-items: center; overflow: hidden; }
+.adminUsersHeader form svg { margin-left: 11px; color: var(--muted); }
+.adminUsersHeader input { min-width: 0; flex: 1; height: 100%; border: 0; padding: 0 9px; outline: 0; }
+.adminUsersHeader form button { align-self: stretch; border: 0; padding: 0 15px; color: #fff; background: var(--accent); cursor: pointer; }
+.adminNotice { margin: 0; padding: 11px 22px; border-bottom: 1px solid #d7e9e4; color: #315d54; background: #eff8f5; font-size: 12px; }
+.adminTable { min-width: 900px; }
+.adminTableHead, .adminUserRow { display: grid; grid-template-columns: minmax(190px,1.2fr) 86px minmax(230px,1fr) 90px minmax(190px,1fr); align-items: center; gap: 14px; padding: 0 22px; }
+.adminTableHead { min-height: 42px; border-bottom: 1px solid var(--line); color: var(--muted); background: #fafcfb; font-size: 11px; }
+.adminUserRow { min-height: 82px; border-bottom: 1px solid #edf0ef; }
+.adminUserRow:last-child { border-bottom: 0; }
+.adminIdentity { min-width: 0; display: grid; gap: 4px; }
+.adminIdentity strong, .adminIdentity small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adminIdentity strong { font-size: 13px; }.adminIdentity small { color: var(--muted); font-size: 11px; }
+.statusBadge, .roleBadge { width: fit-content; border-radius: 99px; padding: 5px 9px; font-size: 10px; font-style: normal; }
+.statusBadge.enabled { color: #176552; background: #e8f6f1; }.statusBadge.disabled { color: #8a4343; background: #faecec; }
+.roleBadge { color: #596461; background: #edf1ef; }.roleBadge.admin { color: #5f4b13; background: #fff3c9; }
+.quotaControl { display: grid; grid-template-columns: 72px 22px 48px; align-items: center; gap: 5px; }
+.quotaControl input { width: 72px; height: 34px; border: 1px solid #d6dcda; border-radius: 6px; padding: 0 7px; }
+.quotaControl small { color: var(--muted); }.quotaControl em { grid-column: 1 / -1; color: var(--muted); font-size: 9px; font-style: normal; }
+.quotaControl button, .adminRowActions button { min-height: 32px; border: 1px solid #d6dcda; border-radius: 6px; padding: 0 8px; color: #42504c; background: #fff; cursor: pointer; font-size: 10px; }
+.quotaControl button:hover, .adminRowActions button:hover { border-color: var(--accent); color: var(--accent); }
+.quotaControl button:disabled, .adminRowActions button:disabled { opacity: .5; cursor: wait; }
+.adminRowActions { display: flex; gap: 6px; }
+
+@media (max-width: 920px) {
+  .adminStats { grid-template-columns: repeat(2,1fr); }
+  .adminUsers { overflow-x: auto; }
+}
+
+@media (max-width: 620px) {
+  .adminContent { width: min(100% - 28px,1180px); padding-top: 34px; }
+  .adminStats { grid-template-columns: 1fr; }
+  .adminUsersHeader { align-items: stretch; flex-direction: column; }
+  .adminUsersHeader form { width: 100%; }
+}
+
 @media (max-width: 1180px) {
   .vaultShell.hasPreview { grid-template-columns: 218px minmax(0,1fr); }
   .topbar { grid-template-columns: 218px minmax(280px, 560px) 1fr; }

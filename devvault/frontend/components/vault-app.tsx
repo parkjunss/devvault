@@ -11,7 +11,7 @@ import {
 } from "@phosphor-icons/react";
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch, apiJson, apiUpload } from "@/lib/api";
-import { clearTokens, getAccessToken, getRefreshToken } from "@/lib/auth";
+import { clearTokens, getAccessToken, getRefreshToken, tokenHasRole } from "@/lib/auth";
 import type { Folder, PageResponse, Tag, VaultFile } from "@/lib/types";
 
 type Nav = "all" | "favorite" | "recent" | "shared" | "trash";
@@ -120,6 +120,7 @@ export function VaultApp() {
   const [toast, setToast] = useState("");
   const [uploadProgress, setUploadProgress] = useState<{ name: string; loaded: number; total: number } | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [isAdmin] = useState(() => tokenHasRole("ROLE_ADMIN"));
   const [openFileMenuId, setOpenFileMenuId] = useState<number | null>(null);
   const [openFolderMenuId, setOpenFolderMenuId] = useState<number | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -521,7 +522,7 @@ export function VaultApp() {
             {profileImageUrl ? <Image unoptimized src={profileImageUrl} alt="프로필 사진" width={36} height={36} /> : <UserCircle className="profileAvatar" size={36} weight="duotone" aria-hidden="true" />}
             <span>{user}</span><CaretDown />
           </button>
-          {profileOpen && <div className="profileMenu"><Link href="/profile" onClick={() => setProfileOpen(false)}><UserCircle /> 프로필</Link><button onClick={logout}><SignOut /> 로그아웃</button></div>}
+          {profileOpen && <div className="profileMenu">{isAdmin && <Link href="/admin" onClick={() => setProfileOpen(false)}><Users /> 사용자 관리</Link>}<Link href="/profile" onClick={() => setProfileOpen(false)}><UserCircle /> 프로필</Link><button onClick={logout}><SignOut /> 로그아웃</button></div>}
         </div>
       </header>
 

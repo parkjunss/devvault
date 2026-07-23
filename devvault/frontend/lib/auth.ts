@@ -22,12 +22,21 @@ export function clearTokens() {
 }
 
 export function tokenSubject() {
+  const payload = tokenPayload();
+  return typeof payload?.sub === "string" ? payload.sub : null;
+}
+
+export function tokenHasRole(role: string) {
+  const roles = tokenPayload()?.roles;
+  return Array.isArray(roles) && roles.includes(role);
+}
+
+function tokenPayload(): Record<string, unknown> | null {
   const token = getAccessToken();
   if (!token) return null;
   try {
     const encoded = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
-    const payload = JSON.parse(atob(encoded.padEnd(Math.ceil(encoded.length / 4) * 4, "=")));
-    return typeof payload.sub === "string" ? payload.sub : null;
+    return JSON.parse(atob(encoded.padEnd(Math.ceil(encoded.length / 4) * 4, "=")));
   } catch {
     return null;
   }
