@@ -5,10 +5,12 @@ import org.eardream.devvault.user.entity.User;
 public record ProfileResponse(
         String username,
         String email,
-        boolean hasProfileImage
+        boolean hasProfileImage,
+        boolean passwordLoginEnabled
 ) {
     public static ProfileResponse from(User user) {
         return new ProfileResponse(user.getUsername(), user.getEmail(),
-                user.getUserImage() != null && !user.getUserImage().isBlank());
+                user.getUserImage() != null && !user.getUserImage().isBlank(),
+                user.isPasswordLoginEnabled());
     }
 }

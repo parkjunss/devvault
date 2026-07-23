@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
@@ -46,7 +47,9 @@ public class UserService {
     public ProfileResponse updatePassword(String email, PasswordChangeRequest request) {
         User user = userRepository.findByEmail(email).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
 
-        if(!passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
+        if (user.isPasswordLoginEnabled()
+                && (!StringUtils.hasText(request.currentPassword())
+                || !passwordEncoder.matches(request.currentPassword(), user.getPassword()))) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "현재 비밀번호가 일치하지 않습니다."

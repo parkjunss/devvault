@@ -25,6 +25,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -61,6 +62,7 @@ class GoogleOAuthServiceTest {
         verify(userRepository).save(createdUser.capture());
         assertNotNull(createdUser.getValue().getTermsAcceptedAt());
         assertNotNull(createdUser.getValue().getPrivacyAcceptedAt());
+        assertFalse(createdUser.getValue().isPasswordLoginEnabled());
         ArgumentCaptor<OauthAccount> account = ArgumentCaptor.forClass(OauthAccount.class);
         verify(oauthAccountRepository).save(account.capture());
         assertEquals(7L, account.getValue().getUserId());
@@ -69,13 +71,15 @@ class GoogleOAuthServiceTest {
 
     @Test
     void reusesAlreadyLinkedGoogleAccount() {
-        User user = User.builder().id(7L).email("user@example.com").password("encoded").username("User").build();
+        User user = User.builder().id(7L).email("user@example.com").password("encoded")
+                .passwordLoginEnabled(null).username("User").build();
         when(oauthAccountRepository.findByProviderAndProviderUserId("google", "google-1"))
                 .thenReturn(Optional.of(OauthAccount.builder().userId(7L).provider("google")
                         .providerUserId("google-1").providerEmail("user@example.com").build()));
         when(userRepository.findById(7L)).thenReturn(Optional.of(user));
 
         assertEquals(user, googleOAuthService.login(googlePrincipal()));
+        assertFalse(user.isPasswordLoginEnabled());
         verify(userRepository, never()).save(any());
         verify(oauthAccountRepository, never()).save(any());
     }

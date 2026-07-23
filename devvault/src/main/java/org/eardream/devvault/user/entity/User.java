@@ -49,6 +49,10 @@ public class User implements UserDetails {
     @Builder.Default
     private boolean enabled = true;
 
+    @Column(name = "password_login_enabled")
+    @Builder.Default
+    private Boolean passwordLoginEnabled = true;
+
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
@@ -92,6 +96,17 @@ public class User implements UserDetails {
 
     public void updatePassword(String password) {
         this.password = password;
+        this.passwordLoginEnabled = true;
+    }
+
+    public boolean isPasswordLoginEnabled() {
+        return passwordLoginEnabled == null || passwordLoginEnabled;
+    }
+
+    public void initializeOAuthPasswordLogin() {
+        if (passwordLoginEnabled == null) {
+            passwordLoginEnabled = false;
+        }
     }
 
     public void updateUsername(String username) {

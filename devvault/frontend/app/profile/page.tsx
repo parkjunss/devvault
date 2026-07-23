@@ -8,7 +8,7 @@ import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { apiFetch, apiJson } from "@/lib/api";
 import { tokenSubject } from "@/lib/auth";
 
-type UserProfile = { email: string; username: string; hasProfileImage: boolean };
+type UserProfile = { email: string; username: string; hasProfileImage: boolean; passwordLoginEnabled: boolean };
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -20,6 +20,7 @@ export default function ProfilePage() {
   const [notice, setNotice] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
   const [passwordNotice, setPasswordNotice] = useState("");
+  const passwordLoginEnabled = profile?.passwordLoginEnabled !== false;
 
   useEffect(() => {
     const email = tokenSubject();
@@ -37,7 +38,7 @@ export default function ProfilePage() {
       setImageUrl(objectUrl);
     }).catch(() => {
       if (cancelled) return;
-      setProfile({ email, username: "", hasProfileImage: false });
+      setProfile({ email, username: "", hasProfileImage: false, passwordLoginEnabled: true });
       setNotice("백엔드 프로필 API 연결이 필요합니다.");
     });
     return () => {
@@ -98,12 +99,17 @@ export default function ProfilePage() {
     setChangingPassword(false);
 
     if (!response?.ok) {
-      setPasswordNotice("비밀번호를 변경하지 못했습니다. 현재 비밀번호를 확인해 주세요.");
+      setPasswordNotice(passwordLoginEnabled
+        ? "비밀번호를 변경하지 못했습니다. 현재 비밀번호를 확인해 주세요."
+        : "비밀번호를 설정하지 못했습니다.");
       return;
     }
 
     form.reset();
-    setPasswordNotice("비밀번호를 변경했습니다.");
+    setPasswordNotice(passwordLoginEnabled
+      ? "비밀번호를 변경했습니다."
+      : "비밀번호를 설정했습니다. 이제 이메일로도 로그인할 수 있습니다.");
+    setProfile(current => current ? { ...current, passwordLoginEnabled: true } : current);
   }
 
   return <main className="profilePage">
@@ -124,15 +130,17 @@ export default function ProfilePage() {
       </div>
       <div className="profileCard passwordCard">
         <header>
-          <h2>비밀번호 변경</h2>
-          <p>현재 비밀번호를 확인한 후 새 비밀번호를 설정합니다.</p>
+          <h2>{passwordLoginEnabled ? "비밀번호 변경" : "비밀번호 설정"}</h2>
+          <p>{passwordLoginEnabled
+            ? "현재 비밀번호를 확인한 후 새 비밀번호를 설정합니다."
+            : "OAuth 계정에 비밀번호를 설정하면 이메일로도 로그인할 수 있습니다."}</p>
         </header>
         <form className="profileForm passwordForm" onSubmit={changePassword}>
-          <label>현재 비밀번호<input name="currentPassword" type="password" required autoComplete="current-password" /></label>
+          {passwordLoginEnabled && <label>현재 비밀번호<input name="currentPassword" type="password" required autoComplete="current-password" /></label>}
           <label>새 비밀번호<input name="newPassword" type="password" required minLength={8} maxLength={72} autoComplete="new-password" /></label>
           <label>새 비밀번호 확인<input name="passwordConfirm" type="password" required minLength={8} maxLength={72} autoComplete="new-password" /></label>
           {passwordNotice && <p className="profileNotice" role="status">{passwordNotice}</p>}
-          <button className="primaryButton" disabled={changingPassword}>{changingPassword ? "변경 중..." : "비밀번호 변경"}</button>
+          <button className="primaryButton" disabled={changingPassword}>{changingPassword ? "처리 중..." : passwordLoginEnabled ? "비밀번호 변경" : "비밀번호 설정"}</button>
         </form>
       </div>
     </section>

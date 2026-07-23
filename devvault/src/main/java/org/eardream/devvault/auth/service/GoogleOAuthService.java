@@ -44,6 +44,7 @@ public class GoogleOAuthService {
                 .map(account -> userRepository.findById(account.getUserId())
                         .orElseThrow(GoogleOAuthService::invalidUserInfo))
                 .orElseGet(() -> linkAccount(principal, providerUserId, email));
+        user.initializeOAuthPasswordLogin();
         if (!user.isEnabled()) {
             throw new OAuth2AuthenticationException(
                     new OAuth2Error("account_disabled"), "비활성화된 사용자입니다.");
@@ -75,6 +76,7 @@ public class GoogleOAuthService {
         User user = userRepository.save(User.builder()
                 .email(email)
                 .password(passwordEncoder.encode(UUID.randomUUID().toString()))
+                .passwordLoginEnabled(false)
                 .username(name)
                 .termsAcceptedAt(acceptedAt)
                 .privacyAcceptedAt(acceptedAt)
