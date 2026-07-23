@@ -111,6 +111,7 @@ export function VaultApp() {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [tableFolders, setTableFolders] = useState<Folder[]>([]);
   const [currentFolder, setCurrentFolder] = useState<Folder | null>(null);
+  const [folderTrail, setFolderTrail] = useState<Folder[]>([]);
   const [dashboard, setDashboard] = useState<Dashboard>({ fileCount: 0, usedBytes: 0, quotaBytes: 50_000_000_000 });
   const [selected, setSelected] = useState<VaultFile | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -391,6 +392,30 @@ export function VaultApp() {
     }
   }
 
+  function openRootFolder(folder: Folder) {
+    setNav("all");
+    setCurrentFolder(folder);
+    setFolderTrail([folder]);
+    setSelected(null);
+  }
+
+  function openChildFolder(folder: Folder) {
+    setCurrentFolder(folder);
+    setFolderTrail(trail => [...trail, folder]);
+    setSelected(null);
+  }
+
+  function openFolderTrail(index: number) {
+    if (index < 0) {
+      setCurrentFolder(null);
+      setFolderTrail([]);
+    } else {
+      setCurrentFolder(folderTrail[index]);
+      setFolderTrail(folderTrail.slice(0, index + 1));
+    }
+    setSelected(null);
+  }
+
   function renameFolder(folder: Folder) {
     setOpenFolderMenuId(null);
     setActionDialog({ action: "rename", target: { type: "folder", item: folder }, value: folder.name, permanent: false });
@@ -420,8 +445,9 @@ export function VaultApp() {
       if (target.type === "file" && selected?.id === target.item.id) {
         setSelected(action === "rename" ? { ...selected, originalName: name } : null);
       }
-      if (target.type === "folder" && action === "rename" && currentFolder?.id === target.item.id) {
-        setCurrentFolder({ ...currentFolder, name });
+      if (target.type === "folder" && action === "rename") {
+        if (currentFolder?.id === target.item.id) setCurrentFolder({ ...currentFolder, name });
+        setFolderTrail(trail => trail.map(folder => folder.id === target.item.id ? { ...folder, name } : folder));
       }
       setOpenFileMenuId(null);
       setOpenFolderMenuId(null);
@@ -539,6 +565,7 @@ export function VaultApp() {
   function changeNav(next: Nav) {
     setNav(next);
     setCurrentFolder(null);
+    setFolderTrail([]);
     setSelected(null);
   }
 
@@ -576,9 +603,9 @@ export function VaultApp() {
         <div className="sidebarDivider" />
         <div className="folderHeading"><span>내 폴더</span><button aria-label="새 폴더" onClick={createFolder}><Plus /></button></div>
         <div className="folderNav">
-          {folders.filter(folder => folder.parentId == null).map(folder => (
-            <button key={folder.id} className={currentFolder?.id === folder.id ? "active" : ""} onClick={() => { setCurrentFolder(folder); setNav("all"); }}><FolderIcon /><span>{folder.name}</span></button>
-          ))}
+            {folders.filter(folder => folder.parentId == null).map(folder => (
+              <button key={folder.id} className={currentFolder?.id === folder.id ? "active" : ""} onClick={() => openRootFolder(folder)}><FolderIcon /><span>{folder.name}</span></button>
+            ))}
         </div>
         <div className="storage">
           <span>저장소 사용량</span>
@@ -591,8 +618,17 @@ export function VaultApp() {
 
       <section className="content">
         <div className="contentHeader">
-          <div><h1>{currentFolder?.name || navItems.find(item => item.id === nav)?.label}</h1>{currentFolder && <button className="breadcrumb" onClick={() => setCurrentFolder(null)}>파일 / {currentFolder.name}</button>}</div>
+          <div>
+            <h1>{currentFolder?.name || navItems.find(item => item.id === nav)?.label}</h1>
+            {currentFolder && <nav className="breadcrumb" aria-label="폴더 경로">
+              <button onClick={() => openFolderTrail(-1)}>파일</button>
+              {folderTrail.map((folder, index) => (
+                <span key={folder.id}> / <button onClick={() => openFolderTrail(index)} aria-current={index === folderTrail.length - 1 ? "page" : undefined}>{folder.name}</button></span>
+              ))}
+            </nav>}
+          </div>
           <div className="headerActions">
+            {nav === "all" && currentFolder && <button className="secondaryButton" onClick={createFolder}><Plus />새 폴더</button>}
             <input ref={uploadRef} type="file" multiple hidden onChange={upload} />
             <button className="primaryButton" disabled={Boolean(uploadProgress)} onClick={() => uploadRef.current?.click()}><UploadSimple />{uploadProgress ? `${uploadProgress.current}/${uploadProgress.count}` : "업로드"}</button>
             <div className="viewToggle" aria-label="보기 방식">
@@ -640,7 +676,7 @@ export function VaultApp() {
           <div className={`fileTable ${view}`}>
             <div className="tableHeader"><span /><span>이름 ↑</span><span>수정일</span><span>크기</span><span>소유자</span><span /></div>
             {nav === "all" && tableFolders.map(folder => (
-              <div className="fileRow" role="button" tabIndex={0} key={`folder-${folder.id}`} onClick={() => setCurrentFolder(folder)} onKeyDown={event => { if (event.key === "Enter") setCurrentFolder(folder); }}>
+              <div className="fileRow" role="button" tabIndex={0} key={`folder-${folder.id}`} onClick={() => openChildFolder(folder)} onKeyDown={event => { if (event.key === "Enter") openChildFolder(folder); }}>
                 <span className="rowCheck" /><span className="nameCell"><FolderIcon weight="fill" className="folderGlyph" /><strong>{folder.name}</strong></span><span>{formatDate(folder.createdAt)}</span><span>–</span><span>나</span>
                 <span className="rowActions">
                   <button className="miniAction" aria-label={`${folder.name} 메뉴`} aria-expanded={openFolderMenuId === folder.id} onClick={event => { event.stopPropagation(); setOpenFileMenuId(null); setOpenFolderMenuId(openFolderMenuId === folder.id ? null : folder.id); }}><DotsThree /></button>
@@ -678,7 +714,7 @@ export function VaultApp() {
           <div><dt>유형</dt><dd>{selected.contentType || "알 수 없음"}</dd></div>
           <div><dt>크기</dt><dd>{formatSize(selected.size)}</dd></div>
           <div><dt>수정일</dt><dd>{formatDate(selected.createdAt)}</dd></div>
-          <div><dt>위치</dt><dd>/{folders.find(folder => folder.id === selected.folderId)?.name || "내 파일"}/{selected.originalName}</dd></div>
+          <div><dt>위치</dt><dd>/{folderTrail.length ? folderTrail.map(folder => folder.name).join("/") : "내 파일"}/{selected.originalName}</dd></div>
         </dl>
         <div className="tags"><span>태그</span><form className="tagForm" onSubmit={attachTag}><input list="available-tags" maxLength={50} value={tagName} onChange={event => setTagName(event.target.value)} placeholder="태그 입력 또는 선택" aria-label="붙일 태그" /><datalist id="available-tags">{availableTags.map(tag => <option key={tag.id} value={tag.name} />)}</datalist><button type="submit" disabled={tagPending || !tagName.trim()} aria-label="태그 붙이기"><Plus />추가</button></form>{!!selected.tags?.length && <div>{selected.tags.map((tag: Tag) => <button type="button" key={tag.id} disabled={tagPending} onClick={() => detachTag(tag)} aria-label={`${tag.name} 태그 제거`}>{tag.name}<X /></button>)}</div>}</div>
         <div className="previewActions"><button className="primaryButton" onClick={download}><DownloadSimple />다운로드</button><button className="secondaryButton" onClick={share}><ShareNetwork />공유</button></div>

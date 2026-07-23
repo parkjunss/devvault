@@ -19,6 +19,11 @@ assert.match(source, /\/api\/files\/\$\{selected\.id\}\/tags/);
 assert.match(source, /usedPercent >= 80/);
 assert.match(source, /setUploadFailure\(/);
 assert.match(source, /aria-label="알림 목록"/);
+assert.match(source, /parentId: currentFolder\?\.id \?\? null/);
+assert.match(source, /const \[folderTrail, setFolderTrail\]/);
+assert.match(source, /aria-label="폴더 경로"/);
+assert.match(source, /openChildFolder\(folder\)/);
+assert.match(source, /folderTrail\.map\(\(folder, index\)/);
 
 const formatSource = source.slice(source.indexOf("function formatSize"), source.indexOf("function formatStorage"));
 const code = ts.transpileModule(`${formatSource}\nglobalThis.formatSize = formatSize;`, {
