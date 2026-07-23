@@ -54,7 +54,9 @@ function FileGlyph({ file, size = 22 }: { file: VaultFile; size?: number }) {
 function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes}B`;
   if (bytes < 1_048_576) return `${Math.round(bytes / 1024)}KB`;
-  return `${(bytes / 1_048_576).toFixed(1)}MB`;
+  if (bytes < 1_073_741_824) return `${(bytes / 1_048_576).toFixed(1)}MB`;
+  if (bytes < 1_099_511_627_776) return `${(bytes / 1_073_741_824).toFixed(1)}GB`;
+  return `${(bytes / 1_099_511_627_776).toFixed(1)}TB`;
 }
 
 function formatStorage(bytes: number) {
@@ -123,6 +125,9 @@ export function VaultApp() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterExtension, setFilterExtension] = useState("");
   const [filterTag, setFilterTag] = useState("");
+  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+  const [tagName, setTagName] = useState("");
+  const [tagPending, setTagPending] = useState(false);
   const [profileName, setProfileName] = useState("");
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
   const [subtitle, setSubtitle] = useState<{ fileId: number; url: string } | null>(null);
@@ -146,6 +151,10 @@ export function VaultApp() {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
+  }, []);
+
+  useEffect(() => {
+    apiJson<Tag[]>("/api/tags").then(setAvailableTags).catch(() => undefined);
   }, []);
 
   useEffect(() => () => {
@@ -411,11 +420,62 @@ export function VaultApp() {
     URL.revokeObjectURL(url);
   }
 
-  function loadSubtitle(event: ChangeEvent<HTMLInputElement>) {
+  async function loadSubtitle(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file || !selectedId) return;
+    if (!(await file.text()).trimStart().startsWith("WEBVTT")) {
+      notify("WEBVTT 형식의 .vtt 자막만 사용할 수 있습니다.");
+      event.target.value = "";
+      return;
+    }
     setSubtitle({ fileId: selectedId, url: URL.createObjectURL(file) });
     event.target.value = "";
+  }
+
+  async function attachTag(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selected) return;
+    const name = tagName.trim();
+    if (!name) return;
+    setTagPending(true);
+    try {
+      let tag = availableTags.find(item => item.name.toLocaleLowerCase() === name.toLocaleLowerCase());
+      if (!tag) {
+        tag = await apiJson<Tag>("/api/tags", { method: "POST", body: JSON.stringify({ name }) });
+        setAvailableTags(items => [...items, tag!].sort((a, b) => a.name.localeCompare(b.name, "ko")));
+      }
+      if (selected.tags?.some(item => item.id === tag.id)) {
+        notify("이미 붙어 있는 태그입니다.");
+        return;
+      }
+      const response = await apiFetch(`/api/files/${selected.id}/tags`, {
+        method: "POST",
+        body: JSON.stringify({ tagId: tag.id })
+      });
+      if (!response.ok) throw new Error();
+      setSelected({ ...selected, tags: [...(selected.tags ?? []), tag].sort((a, b) => a.name.localeCompare(b.name, "ko")) });
+      setTagName("");
+      notify("태그를 붙였습니다.");
+    } catch {
+      notify("태그를 붙이지 못했습니다.");
+    } finally {
+      setTagPending(false);
+    }
+  }
+
+  async function detachTag(tag: Tag) {
+    if (!selected) return;
+    setTagPending(true);
+    try {
+      const response = await apiFetch(`/api/files/${selected.id}/tags/${tag.id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error();
+      setSelected({ ...selected, tags: selected.tags?.filter(item => item.id !== tag.id) });
+      notify("태그를 제거했습니다.");
+    } catch {
+      notify("태그를 제거하지 못했습니다.");
+    } finally {
+      setTagPending(false);
+    }
   }
 
   async function share() {
@@ -568,7 +628,7 @@ export function VaultApp() {
       {selected && <aside className={`previewPanel ${previewExpanded ? "expanded" : ""}`} aria-label="파일 미리보기">
         <header><FileGlyph file={selected} /><strong>{selected.originalName}</strong><button className="iconButton" onClick={() => setPreviewExpanded(value => !value)} aria-label={previewExpanded ? "작게 보기" : "크게 보기"}>{previewExpanded ? <ArrowsIn /> : <ArrowsOut />}</button><button className="iconButton" onClick={() => { setPreviewExpanded(false); setSelected(null); }} aria-label="미리보기 닫기"><X /></button></header>
         <div className={`previewFrame ${fileType(selected)}`}>
-          {previewText !== null ? <pre>{previewText || "내용이 없습니다."}</pre> : previewUrl && fileType(selected) === "pdf" ? <iframe src={previewUrl} title={`${selected.originalName} 미리보기`} /> : previewUrl && fileType(selected) === "audio" ? <audio controls src={previewUrl} /> : previewUrl && fileType(selected) === "video" ? <video ref={videoRef} controls src={previewUrl} onLoadedMetadata={event => { event.currentTarget.playbackRate = playbackRate; }}>{subtitleUrl && <track kind="captions" src={subtitleUrl} srcLang="ko" label="사용자 자막" default />}</video> : previewUrl ? <Image unoptimized src={previewUrl} alt={`${selected.originalName} 미리보기`} width={640} height={820} /> : <FileGlyph file={selected} size={48} />}
+          {previewText !== null ? <pre>{previewText || "내용이 없습니다."}</pre> : previewUrl && fileType(selected) === "pdf" ? <iframe src={previewUrl} title={`${selected.originalName} 미리보기`} /> : previewUrl && fileType(selected) === "audio" ? <audio controls src={previewUrl} /> : previewUrl && fileType(selected) === "video" ? <video key={subtitleUrl || "no-subtitle"} ref={videoRef} controls src={previewUrl} onLoadedMetadata={event => { event.currentTarget.playbackRate = playbackRate; }}>{subtitleUrl && <track kind="captions" src={subtitleUrl} srcLang="ko" label="사용자 자막" default onLoad={event => { event.currentTarget.track.mode = "showing"; }} />}</video> : previewUrl ? <Image unoptimized src={previewUrl} alt={`${selected.originalName} 미리보기`} width={640} height={820} /> : <FileGlyph file={selected} size={48} />}
         </div>
         {fileType(selected) === "video" && <div className="videoSettings">
           <label>재생 속도<select value={playbackRate} onChange={event => { const rate = Number(event.target.value); setPlaybackRate(rate); if (videoRef.current) videoRef.current.playbackRate = rate; }}><option value="0.5">0.5×</option><option value="1">1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label>
@@ -582,7 +642,7 @@ export function VaultApp() {
           <div><dt>수정일</dt><dd>{formatDate(selected.createdAt)}</dd></div>
           <div><dt>위치</dt><dd>/{folders.find(folder => folder.id === selected.folderId)?.name || "내 파일"}/{selected.originalName}</dd></div>
         </dl>
-        {!!selected.tags?.length && <div className="tags"><span>태그</span><div>{selected.tags.map((tag: Tag) => <span key={tag.id}>{tag.name}</span>)}</div></div>}
+        <div className="tags"><span>태그</span><form className="tagForm" onSubmit={attachTag}><input list="available-tags" maxLength={50} value={tagName} onChange={event => setTagName(event.target.value)} placeholder="태그 입력 또는 선택" aria-label="붙일 태그" /><datalist id="available-tags">{availableTags.map(tag => <option key={tag.id} value={tag.name} />)}</datalist><button type="submit" disabled={tagPending || !tagName.trim()} aria-label="태그 붙이기"><Plus />추가</button></form>{!!selected.tags?.length && <div>{selected.tags.map((tag: Tag) => <button type="button" key={tag.id} disabled={tagPending} onClick={() => detachTag(tag)} aria-label={`${tag.name} 태그 제거`}>{tag.name}<X /></button>)}</div>}</div>
         <div className="previewActions"><button className="primaryButton" onClick={download}><DownloadSimple />다운로드</button><button className="secondaryButton" onClick={share}><ShareNetwork />공유</button></div>
       </aside>}
       {actionDialog && <div className="modalBackdrop" onMouseDown={() => !actionPending && setActionDialog(null)}>

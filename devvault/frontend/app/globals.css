@@ -183,7 +183,14 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .previewPanel dd { margin: 0; color: #4b5653; overflow-wrap: anywhere; }
 .tags { margin-top: 23px; display: grid; gap: 10px; color: #6d7875; font-size: 12px; }
 .tags > div { display: flex; flex-wrap: wrap; gap: 7px; }
-.tags > div span { padding: 5px 10px; border: 1px solid #dce2df; border-radius: 5px; background: #f8faf9; color: #57615f; }
+.tags > div button { min-height: 29px; padding: 4px 8px 4px 10px; border: 1px solid #dce2df; border-radius: 5px; display: inline-flex; align-items: center; gap: 5px; background: #f8faf9; color: #57615f; cursor: pointer; }
+.tags > div button:hover { border-color: #e0b6b6; color: var(--danger); background: #fff5f5; }
+.tags > div button svg { font-size: 13px; }
+.tagForm { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 7px; }
+.tagForm input { min-width: 0; height: 36px; border: 1px solid #d6dcda; border-radius: 6px; padding: 0 9px; outline: 0; }
+.tagForm input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(8,125,108,.08); }
+.tagForm button { min-height: 36px; border: 1px solid var(--accent); border-radius: 6px; padding: 0 10px; display: inline-flex; align-items: center; gap: 5px; color: #fff; background: var(--accent); cursor: pointer; }
+.tagForm button:disabled, .tags > div button:disabled { opacity: .55; cursor: wait; }
 .previewActions { margin-top: auto; padding-top: 25px; display: grid; gap: 11px; }
 .previewActions button { width: 100%; }
 .toast { position: fixed; right: 26px; bottom: 24px; z-index: 50; display: flex; align-items: center; gap: 9px; background: #17342f; color: #fff; border-radius: 8px; padding: 12px 16px; box-shadow: 0 12px 32px rgba(8,30,25,.22); font-size: 13px; }
