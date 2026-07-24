@@ -17,6 +17,21 @@ function cueText(value: string) {
     .trim();
 }
 
+const subtitleExtensions = new Set(["vtt", "srt", "smi", "sami"]);
+
+function fileNameParts(name: string) {
+  const match = name.toLowerCase().match(/^(.*)\.([^.]+)$/);
+  return match ? { stem: match[1], extension: match[2] } : { stem: name.toLowerCase(), extension: "" };
+}
+
+export function findMatchingSubtitle<T extends { originalName: string; folderId: number | null }>(video: T, files: T[]) {
+  const videoStem = fileNameParts(video.originalName).stem;
+  return files.find(file => {
+    const { stem, extension } = fileNameParts(file.originalName);
+    return file.folderId === video.folderId && stem === videoStem && subtitleExtensions.has(extension);
+  });
+}
+
 function timestamp(milliseconds: number) {
   const hours = Math.floor(milliseconds / 3_600_000);
   const minutes = Math.floor(milliseconds % 3_600_000 / 60_000);

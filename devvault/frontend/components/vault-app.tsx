@@ -13,7 +13,7 @@ import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useSta
 import { VideoPlayer } from "@/components/video-player";
 import { apiFetch, apiJson, apiUpload } from "@/lib/api";
 import { clearTokens, getAccessToken, getRefreshToken, tokenHasRole } from "@/lib/auth";
-import { decodeSubtitleFile } from "@/lib/subtitles";
+import { decodeSubtitleFile, findMatchingSubtitle } from "@/lib/subtitles";
 import type { Folder, PageResponse, Tag, VaultFile } from "@/lib/types";
 
 type Nav = "all" | "favorite" | "recent" | "shared" | "trash";
@@ -280,6 +280,32 @@ export function VaultApp() {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [selectedId]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    const video = files.find(file => file.id === selectedId);
+    if (!video || fileType(video) !== "video") return;
+    const matchingSubtitle = findMatchingSubtitle(video, files);
+    if (!matchingSubtitle) return;
+
+    let cancelled = false;
+    apiFetch(`/api/files/${matchingSubtitle.id}/download`)
+      .then(response => response.ok ? response.blob() : Promise.reject())
+      .then(async blob => {
+        const vtt = await decodeSubtitleFile(new File([blob], matchingSubtitle.originalName));
+        if (cancelled) return;
+        setSubtitle({
+          fileId: selectedId,
+          url: URL.createObjectURL(new Blob([vtt], { type: "text/vtt;charset=utf-8" })),
+          name: matchingSubtitle.originalName
+        });
+      })
+      .catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [files, selectedId]);
 
   const recent = useMemo(() => files.slice().sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)).slice(0, 3), [files]);
   const usedPercent = Math.min(100, Math.max(0, (dashboard.usedBytes / dashboard.quotaBytes) * 100));

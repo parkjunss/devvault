@@ -10,7 +10,15 @@ const code = ts.transpileModule(source, {
 const sandbox = { module: { exports: {} }, exports: {} };
 sandbox.exports = sandbox.module.exports;
 vm.runInNewContext(code, sandbox);
-const { subtitleToVtt } = sandbox.module.exports;
+const { findMatchingSubtitle, subtitleToVtt } = sandbox.module.exports;
+
+const video = { originalName: "Movie.2026.mp4", folderId: 7 };
+const matching = findMatchingSubtitle(video, [
+  { originalName: "Movie.2026.SRT", folderId: 7 },
+  { originalName: "Movie.2026.vtt", folderId: 8 }
+]);
+assert.equal(matching.originalName, "Movie.2026.SRT");
+assert.equal(findMatchingSubtitle(video, [{ originalName: "other.srt", folderId: 7 }]), undefined);
 
 const srt = `1
 00:00:01,500 --> 00:00:03,000
