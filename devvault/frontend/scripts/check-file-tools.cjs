@@ -24,6 +24,9 @@ assert.match(source, /const \[folderTrail, setFolderTrail\]/);
 assert.match(source, /aria-label="폴더 경로"/);
 assert.match(source, /openChildFolder\(folder\)/);
 assert.match(source, /folderTrail\.map\(\(folder, index\)/);
+assert.match(source, /draggable=\{nav !== "trash"\}/);
+assert.match(source, /onDrop=\{event => dropFile\(event, folder\.id\)\}/);
+assert.match(source, /body: JSON\.stringify\(\{ folderId \}\)/);
 
 const formatSource = source.slice(source.indexOf("function formatSize"), source.indexOf("function formatStorage"));
 const code = ts.transpileModule(`${formatSource}\nglobalThis.formatSize = formatSize;`, {

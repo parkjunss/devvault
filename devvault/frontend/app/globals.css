@@ -77,6 +77,7 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .folderHeading button { border: 0; background: none; padding: 4px; cursor: pointer; color: #5f6a68; }
 .folderNav button { min-height: 42px; }
 .folderNav button svg { font-size: 19px; }
+.folderNav button.dropTarget { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
 .storage { margin-top: auto; padding: 20px 14px 0; display: grid; gap: 7px; color: #596461; font-size: 13px; }
 .storage small { color: #7a8582; }
 .upgradeStorage { margin-top: 4px; color: var(--accent); font-size: 12px; font-weight: 700; text-decoration: none; }
@@ -147,6 +148,9 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .fileRow { width: 100%; min-height: 51px; border: 0; border-bottom: 1px solid #edf0ef; background: #fff; padding: 0 10px; color: #5c6764; text-align: left; font-size: 12px; cursor: pointer; border-radius: 6px; }
 .fileRow:hover { background: #fafcfb; }
 .fileRow.selected { background: #f0f8f6; box-shadow: inset 0 0 0 1px #c8ded8; }
+.fileRow[draggable="true"] { cursor: grab; }
+.fileRow.dragging { opacity: .45; cursor: grabbing; }
+.fileRow.dropTarget { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
 .nameCell { min-width: 0; display: flex; align-items: center; gap: 11px; color: #2b3533; }
 .nameCell strong { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; font-weight: 550; }
 .folderGlyph { color: #f0b81a; }

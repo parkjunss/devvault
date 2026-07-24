@@ -9,7 +9,7 @@ import {
   GridFour, List, MagnifyingGlass, MusicNotes, PencilSimple, Plus, ShareNetwork, ShieldCheck, SignOut,
   SlidersHorizontal, Star, Trash, UploadSimple, UserCircle, Users, X
 } from "@phosphor-icons/react";
-import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { VideoPlayer } from "@/components/video-player";
 import { apiFetch, apiJson, apiUpload } from "@/lib/api";
 import { clearTokens, getAccessToken, getRefreshToken, tokenHasRole } from "@/lib/auth";
@@ -139,6 +139,8 @@ export function VaultApp() {
   const [subtitle, setSubtitle] = useState<{ fileId: number; url: string; name: string } | null>(null);
   const [actionDialog, setActionDialog] = useState<ActionDialog | null>(null);
   const [actionPending, setActionPending] = useState(false);
+  const [draggedFileId, setDraggedFileId] = useState<number | null>(null);
+  const [dropFolderId, setDropFolderId] = useState<number | null>(null);
 
   useEffect(() => {
     let objectUrl: string | null = null;
@@ -331,6 +333,35 @@ export function VaultApp() {
     setPreviewText(null);
     setPreviewUrl(null);
     setSelected(file);
+  }
+
+  function startFileDrag(event: DragEvent<HTMLElement>, file: VaultFile) {
+    setDraggedFileId(file.id);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(file.id));
+  }
+
+  async function dropFile(event: DragEvent<HTMLElement>, folderId: number) {
+    event.preventDefault();
+    event.stopPropagation();
+    const fileId = draggedFileId ?? Number(event.dataTransfer.getData("text/plain"));
+    const file = files.find(candidate => candidate.id === fileId);
+    setDraggedFileId(null);
+    setDropFolderId(null);
+    if (!file || file.folderId === folderId) return;
+
+    try {
+      const response = await apiFetch(`/api/files/${file.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ folderId })
+      });
+      if (!response.ok) throw new Error();
+      setSelected(null);
+      await load();
+      notify(`${file.originalName} 파일을 이동했습니다.`);
+    } catch {
+      notify("파일을 이동하지 못했습니다.");
+    }
   }
 
   async function upload(event: ChangeEvent<HTMLInputElement>) {
@@ -630,7 +661,14 @@ export function VaultApp() {
         <div className="folderHeading"><span>내 폴더</span><button aria-label="새 폴더" onClick={createFolder}><Plus /></button></div>
         <div className="folderNav">
             {folders.filter(folder => folder.parentId == null).map(folder => (
-              <button key={folder.id} className={currentFolder?.id === folder.id ? "active" : ""} onClick={() => openRootFolder(folder)}><FolderIcon /><span>{folder.name}</span></button>
+              <button
+                key={folder.id}
+                className={`${currentFolder?.id === folder.id ? "active" : ""} ${dropFolderId === folder.id ? "dropTarget" : ""}`}
+                onClick={() => openRootFolder(folder)}
+                onDragOver={event => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; setDropFolderId(folder.id); }}
+                onDragLeave={() => setDropFolderId(null)}
+                onDrop={event => dropFile(event, folder.id)}
+              ><FolderIcon /><span>{folder.name}</span></button>
             ))}
         </div>
         <div className="storage">
@@ -702,7 +740,17 @@ export function VaultApp() {
           <div className={`fileTable ${view}`}>
             <div className="tableHeader"><span /><span>이름 ↑</span><span>수정일</span><span>크기</span><span>소유자</span><span /></div>
             {nav === "all" && tableFolders.map(folder => (
-              <div className="fileRow" role="button" tabIndex={0} key={`folder-${folder.id}`} onClick={() => openChildFolder(folder)} onKeyDown={event => { if (event.key === "Enter") openChildFolder(folder); }}>
+              <div
+                className={`fileRow ${dropFolderId === folder.id ? "dropTarget" : ""}`}
+                role="button"
+                tabIndex={0}
+                key={`folder-${folder.id}`}
+                onClick={() => openChildFolder(folder)}
+                onKeyDown={event => { if (event.key === "Enter") openChildFolder(folder); }}
+                onDragOver={event => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; setDropFolderId(folder.id); }}
+                onDragLeave={() => setDropFolderId(null)}
+                onDrop={event => dropFile(event, folder.id)}
+              >
                 <span className="rowCheck" /><span className="nameCell"><FolderIcon weight="fill" className="folderGlyph" /><strong>{folder.name}</strong></span><span>{formatDate(folder.createdAt)}</span><span>–</span><span>나</span>
                 <span className="rowActions">
                   <button className="miniAction" aria-label={`${folder.name} 메뉴`} aria-expanded={openFolderMenuId === folder.id} onClick={event => { event.stopPropagation(); setOpenFileMenuId(null); setOpenFolderMenuId(openFolderMenuId === folder.id ? null : folder.id); }}><DotsThree /></button>
@@ -711,7 +759,17 @@ export function VaultApp() {
               </div>
             ))}
             {files.map(file => (
-              <div className={`fileRow ${selected?.id === file.id ? "selected" : ""}`} role="button" tabIndex={0} key={file.id} onClick={() => openFile(file)} onKeyDown={event => { if (event.key === "Enter") openFile(file); }}>
+            <div
+              className={`fileRow ${selected?.id === file.id ? "selected" : ""} ${draggedFileId === file.id ? "dragging" : ""}`}
+              role="button"
+              tabIndex={0}
+              key={file.id}
+              draggable={nav !== "trash"}
+              onDragStart={event => startFileDrag(event, file)}
+              onDragEnd={() => { setDraggedFileId(null); setDropFolderId(null); }}
+              onClick={() => openFile(file)}
+              onKeyDown={event => { if (event.key === "Enter") openFile(file); }}
+            >
                 <span className="rowCheck">{selected?.id === file.id && <Check weight="bold" />}</span>
                 <span className="nameCell"><FileGlyph file={file} /><strong>{file.originalName}</strong></span>
                 <span>{formatDate(file.createdAt)}</span><span>{formatSize(file.size)}</span><span>나</span>
