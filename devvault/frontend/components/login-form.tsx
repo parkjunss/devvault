@@ -1,28 +1,43 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, ShieldCheck } from "@phosphor-icons/react";
-import { saveTokens } from "@/lib/auth";
+import { exchangeOAuthCode, saveTokens } from "@/lib/auth";
 import type { AuthToken } from "@/lib/types";
 
-export function LoginForm({ initialSignup = false, initialError = "" }: { initialSignup?: boolean; initialError?: string }) {
+export function LoginForm({
+  initialSignup = false,
+  initialError = "",
+  initialOAuthCode = "",
+}: {
+  initialSignup?: boolean;
+  initialError?: string;
+  initialOAuthCode?: string;
+}) {
   const router = useRouter();
+  const oauthExchangeStarted = useRef(false);
   const [signup, setSignup] = useState(initialSignup);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(initialError);
 
   useEffect(() => {
-    const fragment = new URLSearchParams(window.location.hash.slice(1));
-    const accessToken = fragment.get("accessToken");
-    const refreshToken = fragment.get("refreshToken");
-    if (accessToken && refreshToken) {
-      saveTokens({ accessToken, refreshToken, tokenType: "Bearer", expiresIn: 0 });
-      window.history.replaceState(null, "", window.location.pathname + window.location.search);
-      router.replace("/files");
-    }
-  }, [router]);
+    if (!initialOAuthCode || oauthExchangeStarted.current) return;
+    oauthExchangeStarted.current = true;
+    window.history.replaceState(null, "", window.location.pathname);
+    setLoading(true);
+    setError("");
+    exchangeOAuthCode(initialOAuthCode)
+      .then(tokens => {
+        saveTokens(tokens);
+        router.replace("/files");
+      })
+      .catch(exception => {
+        setError(exception instanceof Error ? exception.message : "Google 로그인에 실패했습니다.");
+      })
+      .finally(() => setLoading(false));
+  }, [initialOAuthCode, router]);
 
   async function submit(formData: FormData) {
     setLoading(true);

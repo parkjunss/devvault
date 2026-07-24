@@ -30,6 +30,7 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
+    private final OAuthLoginCodeService oauthLoginCodeService;
     private final EmailDomainValidator emailDomainValidator;
 
     @Transactional
@@ -65,6 +66,11 @@ public class AuthService {
     public AuthToken refresh(String refreshToken) {
         RefreshTokenService.RotatedToken rotated = refreshTokenService.rotate(refreshToken);
         return jwtService.createToken(rotated.user(), rotated.refreshToken());
+    }
+
+    @Transactional
+    public AuthToken exchangeOAuthCode(String code) {
+        return createTokens(oauthLoginCodeService.consume(code));
     }
 
     public void logout(String refreshToken) {

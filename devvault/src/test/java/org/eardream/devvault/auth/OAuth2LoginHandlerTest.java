@@ -1,8 +1,7 @@
 package org.eardream.devvault.auth;
 
-import org.eardream.devvault.auth.dto.AuthToken;
-import org.eardream.devvault.auth.service.AuthService;
 import org.eardream.devvault.auth.service.GoogleOAuthService;
+import org.eardream.devvault.auth.service.OAuthLoginCodeService;
 import org.eardream.devvault.user.entity.User;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -23,30 +22,30 @@ import static org.mockito.Mockito.when;
 class OAuth2LoginHandlerTest {
 
     @Test
-    void redirectsTokensToFrontendFragment() throws Exception {
+    void redirectsOnlyOneTimeCodeToFrontend() throws Exception {
         GoogleOAuthService googleOAuthService = mock(GoogleOAuthService.class);
-        AuthService authService = mock(AuthService.class);
+        OAuthLoginCodeService loginCodeService = mock(OAuthLoginCodeService.class);
         OAuth2LoginHandler handler = new OAuth2LoginHandler(
-                googleOAuthService, authService, "http://localhost:3000/");
+                googleOAuthService, loginCodeService, "http://localhost:3000/");
         var principal = new DefaultOAuth2User(
                 List.of(new SimpleGrantedAuthority("OIDC_USER")),
                 Map.of("sub", "google-1"), "sub");
         var authentication = new OAuth2AuthenticationToken(principal, principal.getAuthorities(), "google");
         User user = User.builder().id(7L).email("user@example.com").password("encoded").username("User").build();
         when(googleOAuthService.login(principal)).thenReturn(user);
-        when(authService.createTokens(user)).thenReturn(new AuthToken("access-token", "refresh-token", "Bearer", 900));
+        when(loginCodeService.issue(user)).thenReturn("one-time-code");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         handler.onAuthenticationSuccess(new MockHttpServletRequest(), response, authentication);
 
-        assertEquals("http://localhost:3000/login#accessToken=access-token&refreshToken=refresh-token",
+        assertEquals("http://localhost:3000/login?oauthCode=one-time-code",
                 response.getRedirectedUrl());
     }
 
     @Test
     void redirectsFailureToLogin() throws Exception {
         OAuth2LoginHandler handler = new OAuth2LoginHandler(
-                mock(GoogleOAuthService.class), mock(AuthService.class), "http://localhost:3000");
+                mock(GoogleOAuthService.class), mock(OAuthLoginCodeService.class), "http://localhost:3000");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         handler.onAuthenticationFailure(new MockHttpServletRequest(), response,

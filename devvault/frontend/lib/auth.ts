@@ -16,6 +16,16 @@ export function saveTokens(tokens: AuthToken) {
   localStorage.setItem(REFRESH_TOKEN, tokens.refreshToken);
 }
 
+export async function exchangeOAuthCode(code: string): Promise<AuthToken> {
+  const response = await fetch("/api/auth/oauth/exchange", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
+  if (!response.ok) throw new Error("Google 로그인 코드를 확인할 수 없습니다.");
+  return response.json() as Promise<AuthToken>;
+}
+
 export function clearTokens() {
   localStorage.removeItem(ACCESS_TOKEN);
   localStorage.removeItem(REFRESH_TOKEN);

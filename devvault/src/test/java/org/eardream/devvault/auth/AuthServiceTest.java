@@ -4,6 +4,7 @@ import org.eardream.devvault.auth.controller.AuthController;
 import org.eardream.devvault.auth.dto.AuthToken;
 import org.eardream.devvault.auth.service.AuthService;
 import org.eardream.devvault.auth.service.JwtService;
+import org.eardream.devvault.auth.service.OAuthLoginCodeService;
 import org.eardream.devvault.auth.service.RefreshTokenService;
 import org.eardream.devvault.auth.service.EmailDomainValidator;
 import org.eardream.devvault.user.entity.Role;
@@ -44,6 +45,9 @@ class AuthServiceTest {
     JwtService jwtService;
     @Mock
     RefreshTokenService refreshTokenService;
+
+    @Mock
+    OAuthLoginCodeService oauthLoginCodeService;
     @Mock
     EmailDomainValidator emailDomainValidator;
     @InjectMocks
@@ -120,6 +124,23 @@ class AuthServiceTest {
         authService.logout("refresh-token");
 
         verify(refreshTokenService).revoke("refresh-token");
+    }
+
+    @Test
+    void exchangesOneTimeOAuthCodeForTokens() {
+        User user = User.builder()
+                .email("user@example.com")
+                .password("encoded")
+                .username("user")
+                .build();
+        when(oauthLoginCodeService.consume("one-time-code")).thenReturn(user);
+        when(refreshTokenService.issue(user)).thenReturn("refresh-token");
+        when(jwtService.createToken(user, "refresh-token"))
+                .thenReturn(new AuthToken("access-token", "refresh-token", "Bearer", 900));
+
+        AuthToken token = authService.exchangeOAuthCode("one-time-code");
+
+        assertEquals("access-token", token.accessToken());
     }
 
     @Test

@@ -38,6 +38,11 @@ public class AuthController {
         return authService.refresh(request.refreshToken());
     }
 
+    @PostMapping("/oauth/exchange")
+    public AuthToken exchangeOAuthCode(@Valid @RequestBody OAuthExchangeRequest request) {
+        return authService.exchangeOAuthCode(request.code());
+    }
+
     @PostMapping("/logout")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void logout(@Valid @RequestBody RefreshRequest request) {
@@ -58,5 +63,8 @@ public class AuthController {
     }
 
     public record RefreshRequest(@NotBlank @Size(max = 200) String refreshToken) {
+    }
+
+    public record OAuthExchangeRequest(@NotBlank @Size(max = 100) String code) {
     }
 }

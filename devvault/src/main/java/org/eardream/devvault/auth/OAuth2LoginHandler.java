@@ -1,8 +1,7 @@
 package org.eardream.devvault.auth;
 
-import org.eardream.devvault.auth.dto.AuthToken;
-import org.eardream.devvault.auth.service.AuthService;
 import org.eardream.devvault.auth.service.GoogleOAuthService;
+import org.eardream.devvault.auth.service.OAuthLoginCodeService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.eardream.devvault.user.entity.User;
@@ -23,14 +22,14 @@ import java.nio.charset.StandardCharsets;
 public class OAuth2LoginHandler implements AuthenticationSuccessHandler, AuthenticationFailureHandler {
 
     private final GoogleOAuthService googleOAuthService;
-    private final AuthService authService;
+    private final OAuthLoginCodeService loginCodeService;
 
     private final String frontendUrl;
 
-    public OAuth2LoginHandler(GoogleOAuthService googleOAuthService, AuthService authService,
+    public OAuth2LoginHandler(GoogleOAuthService googleOAuthService, OAuthLoginCodeService loginCodeService,
                               @Value("${app.frontend-url}") String frontendUrl) {
         this.googleOAuthService = googleOAuthService;
-        this.authService = authService;
+        this.loginCodeService = loginCodeService;
         this.frontendUrl = frontendUrl;
     }
 
@@ -40,9 +39,7 @@ public class OAuth2LoginHandler implements AuthenticationSuccessHandler, Authent
         try {
             OAuth2AuthenticationToken token = (OAuth2AuthenticationToken) authentication;
             User user = googleOAuthService.login(token.getPrincipal());
-            AuthToken tokens = authService.createTokens(user);
-            redirect(response, "#accessToken=" + encode(tokens.accessToken())
-                    + "&refreshToken=" + encode(tokens.refreshToken()));
+            redirect(response, "?oauthCode=" + encode(loginCodeService.issue(user)));
         } catch (OAuth2AuthenticationException exception) {
             onAuthenticationFailure(request, response, exception);
         }
