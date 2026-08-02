@@ -27,7 +27,7 @@ jobs:
           cd "$GITHUB_WORKSPACE/devvault"
           docker compose \
             --project-name devvault \
-            --env-file /home/jun/devvault/devvault/.env \
+            --env-file /home/jun/devvault/.env \
             -f compose.yaml \
             -f compose.production.yaml \
             up -d --build --remove-orphans
@@ -38,7 +38,7 @@ jobs:
           set -euo pipefail
           cd "$GITHUB_WORKSPACE/devvault"
           compose=(docker compose --project-name devvault \
-            --env-file /home/jun/devvault/devvault/.env \
+            --env-file /home/jun/devvault/.env \
             -f compose.yaml \
             -f compose.production.yaml)
           for attempt in {1..24}; do
