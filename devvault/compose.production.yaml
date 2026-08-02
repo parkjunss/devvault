@@ -2,18 +2,18 @@ services:
   app:
     networks:
       default:
-      marketboard:
+      devvault-edge:
         aliases:
           - devvault-app
 
   frontend:
     networks:
       default:
-      marketboard:
+      devvault-edge:
         aliases:
           - devvault-frontend
 
 networks:
-  marketboard:
+  devvault-edge:
     external: true
-    name: marketboard_marketboard
+    name: devvault-edge
