@@ -27,6 +27,18 @@ assert.match(source, /folderTrail\.map\(\(folder, index\)/);
 assert.match(source, /draggable=\{nav !== "trash"\}/);
 assert.match(source, /onDrop=\{event => dropFile\(event, folder\.id\)\}/);
 assert.match(source, /body: JSON\.stringify\(\{ folderId \}\)/);
+assert.match(source, /const \[selectedIds, setSelectedIds\] = useState<Set<number>>/);
+assert.match(source, /input\.indeterminate = selectedVisibleCount > 0 && !allVisibleSelected/);
+assert.match(source, /aria-label="현재 파일 전체 선택"/);
+assert.match(source, /checked=\{selectedIds\.has\(file\.id\)\}/);
+assert.match(source, /aria-label=\{`\$\{file\.originalName\} 선택`\}/);
+assert.match(source, /\{selectedIds\.size\}개 선택/);
+assert.match(source, /setSelectedIds\(new Set\(\)\)/);
+assert.match(source, /apiJson<DownloadTicketResponse>\("\/api\/files\/download-tickets"/);
+assert.match(source, /body: JSON\.stringify\(\{ fileIds \}\)/);
+assert.match(source, /link\.href = ticket\.url/);
+const downloadSource = source.slice(source.indexOf("async function startDownload"), source.indexOf("async function loadSubtitle"));
+assert.doesNotMatch(downloadSource, /response\.blob\(\)/);
 
 const formatSource = source.slice(source.indexOf("function formatSize"), source.indexOf("function formatStorage"));
 const code = ts.transpileModule(`${formatSource}\nglobalThis.formatSize = formatSize;`, {

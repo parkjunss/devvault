@@ -21,6 +21,7 @@ type View = "list" | "grid";
 type Dashboard = { fileCount: number; usedBytes: number; quotaBytes: number };
 type UserProfile = { username: string; hasProfileImage: boolean };
 type PlaybackUrlResponse = { url: string };
+type DownloadTicketResponse = { url: string };
 type ActionTarget = { type: "file"; item: VaultFile } | { type: "folder"; item: Folder };
 type ActionDialog = { action: "rename" | "delete"; target: ActionTarget; value: string; permanent: boolean };
 
@@ -114,6 +115,7 @@ export function VaultApp() {
   const [folderTrail, setFolderTrail] = useState<Folder[]>([]);
   const [dashboard, setDashboard] = useState<Dashboard>({ fileCount: 0, usedBytes: 0, quotaBytes: 50_000_000_000 });
   const [selected, setSelected] = useState<VaultFile | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewText, setPreviewText] = useState<string | null>(null);
   const [previewExpanded, setPreviewExpanded] = useState(false);
@@ -134,6 +136,7 @@ export function VaultApp() {
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
   const [tagName, setTagName] = useState("");
   const [tagPending, setTagPending] = useState(false);
+  const [downloadPending, setDownloadPending] = useState(false);
   const [profileName, setProfileName] = useState("");
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
   const [subtitle, setSubtitle] = useState<{ fileId: number; url: string; name: string } | null>(null);
@@ -171,6 +174,7 @@ export function VaultApp() {
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
+    setSelectedIds(new Set());
     try {
       if (!getAccessToken()) return router.replace("/login");
       if (nav === "shared") {
@@ -323,6 +327,10 @@ export function VaultApp() {
     : 0;
   const user = profileName || "사용자";
   const subtitleUrl = subtitle && subtitle.fileId === selectedId ? subtitle.url : null;
+  const canSelectFiles = nav !== "trash" && nav !== "shared";
+  const selectableFiles = canSelectFiles ? files.slice(0, 100) : [];
+  const selectedVisibleCount = selectableFiles.filter(file => selectedIds.has(file.id)).length;
+  const allVisibleSelected = selectableFiles.length > 0 && selectedVisibleCount === selectableFiles.length;
 
   function notify(message: string) {
     setToast(message);
@@ -333,6 +341,19 @@ export function VaultApp() {
     setPreviewText(null);
     setPreviewUrl(null);
     setSelected(file);
+  }
+
+  function toggleFileSelection(fileId: number) {
+    setSelectedIds(current => {
+      const next = new Set(current);
+      if (next.has(fileId)) next.delete(fileId);
+      else if (next.size < 100) next.add(fileId);
+      return next;
+    });
+  }
+
+  function toggleVisibleFiles() {
+    setSelectedIds(allVisibleSelected ? new Set() : new Set(selectableFiles.map(file => file.id)));
   }
 
   function startFileDrag(event: DragEvent<HTMLElement>, file: VaultFile) {
@@ -454,12 +475,14 @@ export function VaultApp() {
     setCurrentFolder(folder);
     setFolderTrail([folder]);
     setSelected(null);
+    setSelectedIds(new Set());
   }
 
   function openChildFolder(folder: Folder) {
     setCurrentFolder(folder);
     setFolderTrail(trail => [...trail, folder]);
     setSelected(null);
+    setSelectedIds(new Set());
   }
 
   function openFolderTrail(index: number) {
@@ -471,6 +494,7 @@ export function VaultApp() {
       setFolderTrail(folderTrail.slice(0, index + 1));
     }
     setSelected(null);
+    setSelectedIds(new Set());
   }
 
   function renameFolder(folder: Folder) {
@@ -524,19 +548,26 @@ export function VaultApp() {
     }
   }
 
-  async function download() {
-    if (!selected) return;
-    const response = await apiFetch(`/api/files/${selected.id}/download`);
-    if (!response.ok) return notify("다운로드에 실패했습니다.");
-    if (!response.headers.get("content-disposition")?.toLowerCase().startsWith("attachment")) {
-      return notify("안전하지 않은 다운로드 응답을 차단했습니다.");
+  async function startDownload(fileIds: number[]) {
+    if (!fileIds.length || downloadPending) return;
+    setDownloadPending(true);
+    try {
+      const ticket = await apiJson<DownloadTicketResponse>("/api/files/download-tickets", {
+        method: "POST",
+        body: JSON.stringify({ fileIds })
+      });
+      const link = document.createElement("a");
+      link.href = ticket.url;
+      link.setAttribute("aria-hidden", "true");
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setSelectedIds(new Set());
+    } catch {
+      notify("다운로드에 실패했습니다.");
+    } finally {
+      setDownloadPending(false);
     }
-    const url = URL.createObjectURL(await response.blob());
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = selected.originalName;
-    link.click();
-    URL.revokeObjectURL(url);
   }
 
   async function loadSubtitle(file: File) {
@@ -624,6 +655,7 @@ export function VaultApp() {
     setCurrentFolder(null);
     setFolderTrail([]);
     setSelected(null);
+    setSelectedIds(new Set());
   }
 
   return (
@@ -734,11 +766,31 @@ export function VaultApp() {
               </div>}
             </div>
           </div>
-          {error && <div className="stateMessage errorState">{error}<button onClick={load}>다시 시도</button></div>}
+        {selectedIds.size > 0 && <div className="bulkSelectionBar">
+          <strong role="status" aria-live="polite">{selectedIds.size}개 선택</strong>
+          <div>
+            <button type="button" disabled={downloadPending} onClick={() => startDownload([...selectedIds])}><DownloadSimple />{downloadPending ? "준비 중..." : "다운로드"}</button>
+            <button type="button" onClick={() => setSelectedIds(new Set())}><X />선택 해제</button>
+          </div>
+        </div>}
+        {error && <div className="stateMessage errorState">{error}<button onClick={load}>다시 시도</button></div>}
           {nav === "shared" ? <div className="stateMessage"><ShareNetwork /><strong>파일에서 공유 링크를 만들어 보세요.</strong><span>생성한 링크는 7일 동안 안전하게 사용할 수 있습니다.</span></div> :
           loading ? <div className="stateMessage">파일을 불러오는 중...</div> :
           <div className={`fileTable ${view}`}>
-            <div className="tableHeader"><span /><span>이름 ↑</span><span>수정일</span><span>크기</span><span>소유자</span><span /></div>
+            <div className="tableHeader">
+              {canSelectFiles
+                ? <input
+                    ref={input => { if (input) input.indeterminate = selectedVisibleCount > 0 && !allVisibleSelected; }}
+                    className="rowCheck"
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    disabled={!selectableFiles.length}
+                    onChange={toggleVisibleFiles}
+                    aria-label="현재 파일 전체 선택"
+                  />
+                : <span />}
+              <span>이름 ↑</span><span>수정일</span><span>크기</span><span>소유자</span><span />
+            </div>
             {nav === "all" && tableFolders.map(folder => (
               <div
                 className={`fileRow ${dropFolderId === folder.id ? "dropTarget" : ""}`}
@@ -751,7 +803,7 @@ export function VaultApp() {
                 onDragLeave={() => setDropFolderId(null)}
                 onDrop={event => dropFile(event, folder.id)}
               >
-                <span className="rowCheck" /><span className="nameCell"><FolderIcon weight="fill" className="folderGlyph" /><strong>{folder.name}</strong></span><span>{formatDate(folder.createdAt)}</span><span>–</span><span>나</span>
+                <span /><span className="nameCell"><FolderIcon weight="fill" className="folderGlyph" /><strong>{folder.name}</strong></span><span>{formatDate(folder.createdAt)}</span><span>–</span><span>나</span>
                 <span className="rowActions">
                   <button className="miniAction" aria-label={`${folder.name} 메뉴`} aria-expanded={openFolderMenuId === folder.id} onClick={event => { event.stopPropagation(); setOpenFileMenuId(null); setOpenFolderMenuId(openFolderMenuId === folder.id ? null : folder.id); }}><DotsThree /></button>
                   {openFolderMenuId === folder.id && <span className="actionMenu" onClick={event => event.stopPropagation()}><button onClick={() => renameFolder(folder)}><PencilSimple />이름 바꾸기</button><button className="dangerAction" onClick={() => deleteFolder(folder)}><Trash />삭제</button></span>}
@@ -770,7 +822,16 @@ export function VaultApp() {
               onClick={() => openFile(file)}
               onKeyDown={event => { if (event.key === "Enter") openFile(file); }}
             >
-                <span className="rowCheck">{selected?.id === file.id && <Check weight="bold" />}</span>
+                {canSelectFiles
+                  ? <input
+                      className="rowCheck"
+                      type="checkbox"
+                      checked={selectedIds.has(file.id)}
+                      onClick={event => event.stopPropagation()}
+                      onChange={() => toggleFileSelection(file.id)}
+                      aria-label={`${file.originalName} 선택`}
+                    />
+                  : <span />}
                 <span className="nameCell"><FileGlyph file={file} /><strong>{file.originalName}</strong></span>
                 <span>{formatDate(file.createdAt)}</span><span>{formatSize(file.size)}</span><span>나</span>
                 <span className="rowActions">
@@ -801,7 +862,7 @@ export function VaultApp() {
           <div><dt>위치</dt><dd>/{folderTrail.length ? folderTrail.map(folder => folder.name).join("/") : "내 파일"}/{selected.originalName}</dd></div>
         </dl>
         <div className="tags"><span>태그</span><form className="tagForm" onSubmit={attachTag}><input list="available-tags" maxLength={50} value={tagName} onChange={event => setTagName(event.target.value)} placeholder="태그 입력 또는 선택" aria-label="붙일 태그" /><datalist id="available-tags">{availableTags.map(tag => <option key={tag.id} value={tag.name} />)}</datalist><button type="submit" disabled={tagPending || !tagName.trim()} aria-label="태그 붙이기"><Plus />추가</button></form>{!!selected.tags?.length && <div>{selected.tags.map((tag: Tag) => <button type="button" key={tag.id} disabled={tagPending} onClick={() => detachTag(tag)} aria-label={`${tag.name} 태그 제거`}>{tag.name}<X /></button>)}</div>}</div>
-        <div className="previewActions"><button className="primaryButton" onClick={download}><DownloadSimple />다운로드</button><button className="secondaryButton" onClick={share}><ShareNetwork />공유</button></div>
+        <div className="previewActions"><button className="primaryButton" disabled={downloadPending} onClick={() => selected && startDownload([selected.id])}><DownloadSimple />{downloadPending ? "준비 중..." : "다운로드"}</button><button className="secondaryButton" onClick={share}><ShareNetwork />공유</button></div>
       </aside>}
       {actionDialog && <div className="modalBackdrop" onMouseDown={() => !actionPending && setActionDialog(null)}>
         <form className="actionDialog" role="dialog" aria-modal="true" aria-labelledby="action-dialog-title" aria-describedby="action-dialog-description" onSubmit={submitAction} onMouseDown={event => event.stopPropagation()}>

@@ -3,7 +3,7 @@ package org.eardream.devvault.file;
 import org.eardream.devvault.file.controller.FileController;
 import org.eardream.devvault.file.entity.StoredFile;
 import org.eardream.devvault.file.service.FileStorageService;
-import org.eardream.devvault.file.service.PlaybackTokenService;
+import org.eardream.devvault.file.service.FileAccessTokenService;
 import org.eardream.devvault.user.entity.User;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -35,9 +35,9 @@ class FilePlaybackControllerTest {
                 .originalName("video.mp4").storedName("stored-video")
                 .contentType("video/mp4").size(10L).checksum("checksum").build();
         FileStorageService files = mock(FileStorageService.class);
-        PlaybackTokenService tokens = mock(PlaybackTokenService.class);
-        when(tokens.verify("signed-token"))
-                .thenReturn(new PlaybackTokenService.PlaybackGrant("user@example.com", 42L));
+        FileAccessTokenService tokens = mock(FileAccessTokenService.class);
+        when(tokens.verifyPlayback("signed-token"))
+                .thenReturn(new FileAccessTokenService.PlaybackGrant("user@example.com", 42L));
         when(files.preview("user@example.com", 42L))
                 .thenReturn(new FileStorageService.StoredPreview(file, video, MediaType.parseMediaType("video/mp4")));
         FileController controller = new FileController(files, tokens, false, "/__devvault_files/");

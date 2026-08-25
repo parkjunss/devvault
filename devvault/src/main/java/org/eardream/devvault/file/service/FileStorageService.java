@@ -30,6 +30,7 @@ import java.security.MessageDigest;
 import java.security.DigestInputStream;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
@@ -193,6 +194,17 @@ public class FileStorageService {
             throw notFound();
         }
         return new StoredDownload(storedFile, path);
+    }
+
+    @Transactional(readOnly = true)
+    public List<StoredDownload> downloads(String ownerEmail, List<Long> fileIds) {
+        if (fileIds == null || fileIds.isEmpty() || fileIds.size() > 100
+                || fileIds.stream().anyMatch(id -> id == null || id <= 0)
+                || fileIds.stream().distinct().count() != fileIds.size()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "파일 ID는 중복 없이 1개 이상 100개 이하여야 합니다.");
+        }
+        // ponytail: at most 100 existing ownership checks; add one bulk query only if this path becomes hot.
+        return fileIds.stream().map(id -> download(ownerEmail, id)).toList();
     }
 
     @Transactional(readOnly = true)

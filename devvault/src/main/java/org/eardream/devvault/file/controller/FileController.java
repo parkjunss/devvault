@@ -1,11 +1,15 @@
 package org.eardream.devvault.file.controller;
 
 import org.eardream.devvault.file.service.FileStorageService;
-import org.eardream.devvault.file.service.PlaybackTokenService;
+import org.eardream.devvault.file.service.FileAccessTokenService;
 import org.eardream.devvault.file.entity.StoredFile;
 import org.eardream.devvault.fileTag.entity.Tag;
 import org.eardream.devvault.fileTag.controller.TagController;
 import tools.jackson.databind.JsonNode;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
@@ -33,29 +37,35 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 @RestController
 @RequestMapping("/api/files")
 public class FileController {
     private final FileStorageService fileStorageService;
-    private final PlaybackTokenService playbackTokenService;
+    private final FileAccessTokenService fileAccessTokenService;
     private final boolean accelRedirectEnabled;
     private final String accelRedirectPrefix;
 
     public FileController(FileStorageService fileStorageService,
-                          PlaybackTokenService playbackTokenService,
+                          FileAccessTokenService fileAccessTokenService,
                           @Value("${app.storage.accel-redirect-enabled:false}") boolean accelRedirectEnabled,
                           @Value("${app.storage.accel-redirect-prefix:/__devvault_files/}")
                           String accelRedirectPrefix) {
         this.fileStorageService = fileStorageService;
-        this.playbackTokenService = playbackTokenService;
+        this.fileAccessTokenService = fileAccessTokenService;
         this.accelRedirectEnabled = accelRedirectEnabled;
         this.accelRedirectPrefix = accelRedirectPrefix.endsWith("/")
                 ? accelRedirectPrefix : accelRedirectPrefix + "/";
@@ -118,6 +128,52 @@ public class FileController {
                 .body(new InputStreamResource(Files.newInputStream(download.path())));
     }
 
+    @PostMapping("/download-tickets")
+    DownloadTicketResponse downloadTicket(@AuthenticationPrincipal Jwt jwt,
+                                          @Valid @RequestBody DownloadTicketRequest request) {
+        String email = jwt.getSubject();
+        fileStorageService.downloads(email, request.fileIds());
+        String token = fileAccessTokenService.issueDownload(email, request.fileIds());
+        return new DownloadTicketResponse("/api/files/download/" + token);
+    }
+
+    @GetMapping("/download/{token}")
+    ResponseEntity<StreamingResponseBody> ticketDownload(@PathVariable String token) {
+        FileAccessTokenService.DownloadGrant grant = fileAccessTokenService.verifyDownload(token);
+        List<FileStorageService.StoredDownload> downloads =
+                fileStorageService.downloads(grant.email(), grant.fileIds());
+        if (downloads.size() == 1) {
+            FileStorageService.StoredDownload download = downloads.get(0);
+            StoredFile metadata = download.metadata();
+            StreamingResponseBody body = output -> {
+                try (InputStream input = Files.newInputStream(download.path())) {
+                    input.transferTo(output);
+                }
+            };
+            return downloadHeaders(ContentDisposition.attachment()
+                            .filename(metadata.getOriginalName(), StandardCharsets.UTF_8).build())
+                    .contentType(parseMediaType(metadata.getContentType()))
+                    .contentLength(metadata.getSize())
+                    .body(body);
+        }
+
+        StreamingResponseBody body = output -> {
+            try (ZipOutputStream zip = new ZipOutputStream(output, StandardCharsets.UTF_8)) {
+                Set<String> usedNames = new HashSet<>();
+                for (FileStorageService.StoredDownload download : downloads) {
+                    zip.putNextEntry(new ZipEntry(uniqueZipName(download.metadata().getOriginalName(), usedNames)));
+                    try (InputStream input = Files.newInputStream(download.path())) {
+                        input.transferTo(zip);
+                    }
+                    zip.closeEntry();
+                }
+            }
+        };
+        return downloadHeaders(ContentDisposition.attachment().filename("devvault-files.zip").build())
+                .contentType(MediaType.parseMediaType("application/zip"))
+                .body(body);
+    }
+
     @GetMapping("/{id}/preview")
     ResponseEntity<InputStreamResource> preview(@AuthenticationPrincipal Jwt jwt,
                                                 @PathVariable Long id) throws IOException {
@@ -138,13 +194,13 @@ public class FileController {
     @PostMapping("/{id}/playback-url")
     PlaybackUrlResponse playbackUrl(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
         fileStorageService.preview(jwt.getSubject(), id);
-        String token = playbackTokenService.issue(jwt.getSubject(), id);
+        String token = fileAccessTokenService.issuePlayback(jwt.getSubject(), id);
         return new PlaybackUrlResponse("/api/files/playback/" + token);
     }
 
     @GetMapping("/playback/{token}")
     ResponseEntity<?> playback(@PathVariable String token) {
-        PlaybackTokenService.PlaybackGrant grant = playbackTokenService.verify(token);
+        FileAccessTokenService.PlaybackGrant grant = fileAccessTokenService.verifyPlayback(token);
         FileStorageService.StoredPreview preview = fileStorageService.preview(grant.email(), grant.fileId());
         ContentDisposition disposition = ContentDisposition.inline()
                 .filename(preview.metadata().getOriginalName(), StandardCharsets.UTF_8)
@@ -209,6 +265,29 @@ public class FileController {
         }
     }
 
+    private static ResponseEntity.BodyBuilder downloadHeaders(ContentDisposition disposition) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .header("X-Content-Type-Options", "nosniff")
+                .header("Content-Security-Policy", "sandbox; default-src 'none'");
+    }
+
+    private static String uniqueZipName(String originalName, Set<String> usedNames) {
+        String normalized = originalName == null ? "file" : originalName.replace('\\', '/');
+        String safeName = normalized.substring(normalized.lastIndexOf('/') + 1);
+        if (safeName.isBlank()) safeName = "file";
+        if (usedNames.add(safeName)) return safeName;
+
+        int dot = safeName.lastIndexOf('.');
+        String stem = dot > 0 ? safeName.substring(0, dot) : safeName;
+        String extension = dot > 0 ? safeName.substring(dot) : "";
+        for (int index = 2; ; index++) {
+            String candidate = stem + " (" + index + ")" + extension;
+            if (usedNames.add(candidate)) return candidate;
+        }
+    }
+
     private static Long parseFolderId(JsonNode folderId) {
         if (folderId == null || folderId.isNull()) {
             return null;
@@ -253,5 +332,12 @@ public class FileController {
     }
 
     public record PlaybackUrlResponse(String url) {
+    }
+
+    public record DownloadTicketRequest(
+            @NotEmpty @Size(max = 100) List<@Positive Long> fileIds) {
+    }
+
+    public record DownloadTicketResponse(String url) {
     }
 }
