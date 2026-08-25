@@ -77,6 +77,22 @@ export async function apiUpload(
 
 export async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await apiFetch(path, init);
-  if (!response.ok) throw new Error((await response.text()) || `요청에 실패했습니다. (${response.status})`);
+  if (!response.ok) throw new Error(await responseErrorMessage(response));
   return response.json() as Promise<T>;
+}
+
+async function responseErrorMessage(response: Response) {
+  const raw = await response.text();
+  if (raw) {
+    try {
+      const body = JSON.parse(raw) as { message?: unknown; detail?: unknown; error?: unknown };
+      for (const value of [body.message, body.detail, body.error]) {
+        if (typeof value === "string" && value.trim()) return value.trim();
+      }
+    } catch {
+      return raw;
+    }
+  }
+  if (response.status === 401) return "로그인이 만료되었습니다. 다시 로그인해 주세요.";
+  return `요청에 실패했습니다. (${response.status})`;
 }

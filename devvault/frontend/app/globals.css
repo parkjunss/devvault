@@ -195,6 +195,10 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .previewPanel.expanded .previewFrame pre { min-height: 90vh; max-height: none; }
 .previewFrame { min-height: 340px; border: 1px solid #dfe4e2; border-radius: 7px; background: #fbfcfb; overflow: hidden; display: flex; align-items: center; justify-content: center; }
 .previewFrame img, .previewFrame iframe { width: 100%; height: 100%; min-height: 340px; border: 0; object-fit: contain; background: #fff; }
+.pdfDocument { width: 100%; min-height: 340px; align-self: stretch; display: flex; flex-direction: column; background: #fff; }
+.pdfDocument > a { min-height: 44px; padding: 10px 14px; display: flex; align-items: center; justify-content: center; gap: 7px; color: var(--green); font-size: 13px; font-weight: 700; border-bottom: 1px solid var(--line); background: #f5faf8; }
+.pdfDocument > a:hover { background: #eaf5f1; }
+.pdfDocument > iframe { flex: 1; }
 .previewFrame audio { width: calc(100% - 32px); }
 .videoPlayer { position: relative; width: 100%; align-self: stretch; display: flex; align-items: center; background: #000; overflow: hidden; }
 .videoPlayer video { display: block; width: 100%; max-height: 520px; background: #000; cursor: pointer; }

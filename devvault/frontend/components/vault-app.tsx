@@ -259,7 +259,7 @@ export function VaultApp() {
     let objectUrl: string | null = null;
     let cancelled = false;
     apiJson<VaultFile>(`/api/files/${selectedId}`).then(async detail => {
-      if (fileType(detail) === "video") {
+      if (fileType(detail) === "video" || fileType(detail) === "pdf") {
         const playback = await apiJson<PlaybackUrlResponse>(`/api/files/${selectedId}/playback-url`, {
           method: "POST"
         });
@@ -332,9 +332,9 @@ export function VaultApp() {
   const selectedVisibleCount = selectableFiles.filter(file => selectedIds.has(file.id)).length;
   const allVisibleSelected = selectableFiles.length > 0 && selectedVisibleCount === selectableFiles.length;
 
-  function notify(message: string) {
+  function notify(message: string, duration = 2600) {
     setToast(message);
-    window.setTimeout(() => setToast(""), 2600);
+    window.setTimeout(() => setToast(""), duration);
   }
 
   function openFile(file: VaultFile) {
@@ -563,8 +563,9 @@ export function VaultApp() {
       link.click();
       link.remove();
       setSelectedIds(new Set());
-    } catch {
-      notify("다운로드에 실패했습니다.");
+    } catch (exception) {
+      const reason = exception instanceof Error ? exception.message : "알 수 없는 오류입니다.";
+      notify(`다운로드 실패: ${reason}`, 7000);
     } finally {
       setDownloadPending(false);
     }
@@ -853,7 +854,7 @@ export function VaultApp() {
       {selected && <aside className={`previewPanel ${previewExpanded ? "expanded" : ""}`} aria-label="파일 미리보기">
         <header><FileGlyph file={selected} /><strong>{selected.originalName}</strong><button className="iconButton" onClick={() => setPreviewExpanded(value => !value)} aria-label={previewExpanded ? "작게 보기" : "크게 보기"}>{previewExpanded ? <ArrowsIn /> : <ArrowsOut />}</button><button className="iconButton" onClick={() => { setPreviewExpanded(false); setSelected(null); }} aria-label="미리보기 닫기"><X /></button></header>
         <div className={`previewFrame ${fileType(selected)}`}>
-          {previewText !== null ? <pre>{previewText || "내용이 없습니다."}</pre> : previewUrl && fileType(selected) === "pdf" ? <iframe src={previewUrl} title={`${selected.originalName} 미리보기`} /> : previewUrl && fileType(selected) === "audio" ? <audio controls src={previewUrl} /> : previewUrl && fileType(selected) === "video" ? <VideoPlayer src={previewUrl} subtitleUrl={subtitleUrl} subtitleName={subtitle?.name} onSubtitleFile={loadSubtitle} onRemoveSubtitle={() => setSubtitle(null)} /> : previewUrl ? <Image unoptimized src={previewUrl} alt={`${selected.originalName} 미리보기`} width={640} height={820} /> : <FileGlyph file={selected} size={48} />}
+          {previewText !== null ? <pre>{previewText || "내용이 없습니다."}</pre> : previewUrl && fileType(selected) === "pdf" ? <div className="pdfDocument"><a href={previewUrl} target="_blank" rel="noopener noreferrer"><ArrowsOut />새 탭에서 전체 문서 보기</a><iframe src={previewUrl} title={`${selected.originalName} 미리보기`} /></div> : previewUrl && fileType(selected) === "audio" ? <audio controls src={previewUrl} /> : previewUrl && fileType(selected) === "video" ? <VideoPlayer src={previewUrl} subtitleUrl={subtitleUrl} subtitleName={subtitle?.name} onSubtitleFile={loadSubtitle} onRemoveSubtitle={() => setSubtitle(null)} /> : previewUrl ? <Image unoptimized src={previewUrl} alt={`${selected.originalName} 미리보기`} width={640} height={820} /> : <FileGlyph file={selected} size={48} />}
         </div>
         <dl>
           <div><dt>유형</dt><dd>{selected.contentType || "알 수 없음"}</dd></div>

@@ -5,6 +5,7 @@ const ts = require("typescript");
 
 const source = fs.readFileSync("components/vault-app.tsx", "utf8");
 const playerSource = fs.readFileSync("components/video-player.tsx", "utf8");
+const apiSource = fs.readFileSync("lib/api.ts", "utf8");
 assert.match(source, /<VideoPlayer/);
 assert.doesNotMatch(source, /<video key=/);
 assert.match(playerSource, /accept="\.vtt,\.srt,\.smi,\.sami/);
@@ -39,6 +40,13 @@ assert.match(source, /body: JSON\.stringify\(\{ fileIds \}\)/);
 assert.match(source, /link\.href = ticket\.url/);
 const downloadSource = source.slice(source.indexOf("async function startDownload"), source.indexOf("async function loadSubtitle"));
 assert.doesNotMatch(downloadSource, /response\.blob\(\)/);
+const previewSource = source.slice(source.indexOf("const selectedId = selected?.id"), source.indexOf("useEffect(() => {", source.indexOf("const selectedId = selected?.id") + 100));
+assert.match(previewSource, /fileType\(detail\) === "video" \|\| fileType\(detail\) === "pdf"/);
+assert.match(source, /새 탭에서 전체 문서 보기/);
+assert.match(downloadSource, /exception instanceof Error \? exception\.message/);
+assert.match(downloadSource, /notify\(`다운로드 실패: \$\{reason\}`, 7000\)/);
+assert.match(apiSource, /body\.message, body\.detail, body\.error/);
+assert.match(apiSource, /로그인이 만료되었습니다/);
 
 const formatSource = source.slice(source.indexOf("function formatSize"), source.indexOf("function formatStorage"));
 const code = ts.transpileModule(`${formatSource}\nglobalThis.formatSize = formatSize;`, {
