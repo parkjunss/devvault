@@ -22,6 +22,7 @@ type Dashboard = { fileCount: number; usedBytes: number; quotaBytes: number };
 type UserProfile = { username: string; hasProfileImage: boolean };
 type PlaybackUrlResponse = { url: string };
 type DownloadTicketResponse = { url: string };
+type PreparedDownload = { url: string; fileIds: number[] };
 type ActionTarget = { type: "file"; item: VaultFile } | { type: "folder"; item: Folder };
 type ActionDialog = { action: "rename" | "delete"; target: ActionTarget; value: string; permanent: boolean };
 
@@ -137,6 +138,7 @@ export function VaultApp() {
   const [tagName, setTagName] = useState("");
   const [tagPending, setTagPending] = useState(false);
   const [downloadPending, setDownloadPending] = useState(false);
+  const [preparedDownload, setPreparedDownload] = useState<PreparedDownload | null>(null);
   const [profileName, setProfileName] = useState("");
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
   const [subtitle, setSubtitle] = useState<{ fileId: number; url: string; name: string } | null>(null);
@@ -175,6 +177,7 @@ export function VaultApp() {
     setLoading(true);
     setError("");
     setSelectedIds(new Set());
+    setPreparedDownload(null);
     try {
       if (!getAccessToken()) return router.replace("/login");
       if (nav === "shared") {
@@ -551,18 +554,14 @@ export function VaultApp() {
   async function startDownload(fileIds: number[]) {
     if (!fileIds.length || downloadPending) return;
     setDownloadPending(true);
+    setPreparedDownload(null);
     try {
       const ticket = await apiJson<DownloadTicketResponse>("/api/files/download-tickets", {
         method: "POST",
         body: JSON.stringify({ fileIds })
       });
-      const link = document.createElement("a");
-      link.href = ticket.url;
-      link.setAttribute("aria-hidden", "true");
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setSelectedIds(new Set());
+      setPreparedDownload({ url: ticket.url, fileIds });
+      window.location.assign(ticket.url);
     } catch (exception) {
       const reason = exception instanceof Error ? exception.message : "알 수 없는 오류입니다.";
       notify(`다운로드 실패: ${reason}`, 7000);
@@ -770,7 +769,9 @@ export function VaultApp() {
         {selectedIds.size > 0 && <div className="bulkSelectionBar">
           <strong role="status" aria-live="polite">{selectedIds.size}개 선택</strong>
           <div>
-            <button type="button" disabled={downloadPending} onClick={() => startDownload([...selectedIds])}><DownloadSimple />{downloadPending ? "준비 중..." : "다운로드"}</button>
+            {preparedDownload && preparedDownload.fileIds.length === selectedIds.size && preparedDownload.fileIds.every(id => selectedIds.has(id))
+              ? <a className="preparedDownloadLink" href={preparedDownload.url}><DownloadSimple />다운로드 열기</a>
+              : <button type="button" disabled={downloadPending} onClick={() => startDownload([...selectedIds])}><DownloadSimple />{downloadPending ? "준비 중..." : "다운로드"}</button>}
             <button type="button" onClick={() => setSelectedIds(new Set())}><X />선택 해제</button>
           </div>
         </div>}
@@ -863,7 +864,7 @@ export function VaultApp() {
           <div><dt>위치</dt><dd>/{folderTrail.length ? folderTrail.map(folder => folder.name).join("/") : "내 파일"}/{selected.originalName}</dd></div>
         </dl>
         <div className="tags"><span>태그</span><form className="tagForm" onSubmit={attachTag}><input list="available-tags" maxLength={50} value={tagName} onChange={event => setTagName(event.target.value)} placeholder="태그 입력 또는 선택" aria-label="붙일 태그" /><datalist id="available-tags">{availableTags.map(tag => <option key={tag.id} value={tag.name} />)}</datalist><button type="submit" disabled={tagPending || !tagName.trim()} aria-label="태그 붙이기"><Plus />추가</button></form>{!!selected.tags?.length && <div>{selected.tags.map((tag: Tag) => <button type="button" key={tag.id} disabled={tagPending} onClick={() => detachTag(tag)} aria-label={`${tag.name} 태그 제거`}>{tag.name}<X /></button>)}</div>}</div>
-        <div className="previewActions"><button className="primaryButton" disabled={downloadPending} onClick={() => selected && startDownload([selected.id])}><DownloadSimple />{downloadPending ? "준비 중..." : "다운로드"}</button><button className="secondaryButton" onClick={share}><ShareNetwork />공유</button></div>
+        <div className="previewActions">{preparedDownload?.fileIds.length === 1 && preparedDownload.fileIds[0] === selected.id ? <a className="primaryButton" href={preparedDownload.url}><DownloadSimple />다운로드 열기</a> : <button className="primaryButton" disabled={downloadPending} onClick={() => startDownload([selected.id])}><DownloadSimple />{downloadPending ? "준비 중..." : "다운로드"}</button>}<button className="secondaryButton" onClick={share}><ShareNetwork />공유</button></div>
       </aside>}
       {actionDialog && <div className="modalBackdrop" onMouseDown={() => !actionPending && setActionDialog(null)}>
         <form className="actionDialog" role="dialog" aria-modal="true" aria-labelledby="action-dialog-title" aria-describedby="action-dialog-description" onSubmit={submitAction} onMouseDown={event => event.stopPropagation()}>

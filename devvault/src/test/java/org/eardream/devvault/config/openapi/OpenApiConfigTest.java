@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -35,5 +36,11 @@ class OpenApiConfigTest {
                 .andExpect(jsonPath("$.info.title").value("DevVault API"));
         mockMvc.perform(get("/api/swagger-ui.html"))
                 .andExpect(status().is3xxRedirection());
+    }
+
+    @Test
+    void allowsSameOriginSignedFilePreviewFrames() throws Exception {
+        mockMvc.perform(get("/api/files/playback/invalid-token"))
+                .andExpect(header().string("X-Frame-Options", "SAMEORIGIN"));
     }
 }

@@ -131,7 +131,7 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .sectionTitle { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
 .bulkSelectionBar { min-height: 48px; margin-bottom: 10px; padding: 8px 10px 8px 14px; border: 1px solid #c8ded8; border-radius: 7px; display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #24564e; background: var(--accent-soft); }
 .bulkSelectionBar > div { display: flex; gap: 8px; }
-.bulkSelectionBar button { min-height: 32px; border: 1px solid #b8d4cd; border-radius: 6px; padding: 0 10px; display: inline-flex; align-items: center; gap: 5px; color: #24564e; background: #fff; cursor: pointer; font-weight: 650; }
+.bulkSelectionBar button, .bulkSelectionBar a { min-height: 32px; border: 1px solid #b8d4cd; border-radius: 6px; padding: 0 10px; display: inline-flex; align-items: center; gap: 5px; color: #24564e; background: #fff; cursor: pointer; font-weight: 650; text-decoration: none; }
 .bulkSelectionBar button:disabled { cursor: not-allowed; opacity: .55; }
 .iconButton { border: 0; background: transparent; width: 38px; height: 38px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 7px; cursor: pointer; font-size: 21px; }
 .iconButton:hover { background: var(--soft); }
@@ -239,7 +239,7 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .tagForm button { min-height: 36px; border: 1px solid var(--accent); border-radius: 6px; padding: 0 10px; display: inline-flex; align-items: center; gap: 5px; color: #fff; background: var(--accent); cursor: pointer; }
 .tagForm button:disabled, .tags > div button:disabled { opacity: .55; cursor: wait; }
 .previewActions { margin-top: auto; padding-top: 25px; display: grid; gap: 11px; }
-.previewActions button { width: 100%; }
+.previewActions button, .previewActions a { width: 100%; text-decoration: none; }
 .toast { position: fixed; right: 26px; bottom: 24px; z-index: 50; display: flex; align-items: center; gap: 9px; background: #17342f; color: #fff; border-radius: 8px; padding: 12px 16px; box-shadow: 0 12px 32px rgba(8,30,25,.22); font-size: 13px; }
 .modalBackdrop { position: fixed; inset: 0; z-index: 120; padding: 20px; display: grid; place-items: center; background: rgba(18,32,29,.48); }
 .actionDialog { width: min(100%, 430px); padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: #fff; box-shadow: 0 22px 70px rgba(18,32,29,.28); }
