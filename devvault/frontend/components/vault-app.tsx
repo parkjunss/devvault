@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  ArrowsIn, ArrowsOut, Bell, CaretDown, Check, ClockCounterClockwise, DotsThree, DownloadSimple, FilmStrip,
+  ArrowsIn, ArrowsOut, Bell, BookOpen, CaretDown, Check, ClockCounterClockwise, DotsThree, DownloadSimple, FilmStrip,
   File as FileIcon, FileCode, FileImage, FilePdf, FileText, Folder as FolderIcon,
   GridFour, List, MagnifyingGlass, MusicNotes, PencilSimple, Plus, ShareNetwork, ShieldCheck, SignOut,
   SlidersHorizontal, Star, Trash, UploadSimple, UserCircle, Users, X
@@ -688,6 +688,7 @@ export function VaultApp() {
       <aside className="sidebar">
         <nav aria-label="주 메뉴">
           {navItems.map(item => <button key={item.id} className={nav === item.id ? "active" : ""} onClick={() => changeNav(item.id)}><item.icon /><span>{item.label}</span></button>)}
+          <Link href="/courses"><BookOpen /><span>학습</span></Link>
         </nav>
         <div className="sidebarDivider" />
         <div className="folderHeading"><span>내 폴더</span><button aria-label="새 폴더" onClick={createFolder}><Plus /></button></div>

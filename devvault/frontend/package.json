@@ -16,9 +16,13 @@
   "dependencies": {
     "@fontsource-variable/noto-sans-kr": "^5.2.8",
     "@phosphor-icons/react": "^2.1.10",
+    "katex": "^0.18.7",
     "next": "^16.2.10",
     "react": "19.1.1",
-    "react-dom": "19.1.1"
+    "react-dom": "19.1.1",
+    "react-markdown": "^10.1.0",
+    "rehype-katex": "^7.0.1",
+    "remark-math": "^6.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

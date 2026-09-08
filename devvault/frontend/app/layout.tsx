@@ -1,4 +1,5 @@
 import "@fontsource-variable/noto-sans-kr";
+import "katex/dist/katex.min.css";
 import "./globals.css";
 import type { Metadata } from "next";
 

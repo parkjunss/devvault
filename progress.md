@@ -27,7 +27,7 @@ Ubuntu `aarch64` 라즈베리파이에서 Docker Compose로 운영하는 개인 
 - MySQL 8.4 Docker Compose와 영속 볼륨 구성
 - `.env` 기반 로컬 설정 및 `.env.example` 제공
 - JWT, OAuth, 파일 업로드, Prometheus 관련 환경변수 분리
-- 최대 업로드 크기 200MB 설정
+- 최대 업로드 크기 5GB 설정
 
 ### 인증과 권한
 

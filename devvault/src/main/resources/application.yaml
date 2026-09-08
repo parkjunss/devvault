@@ -23,8 +23,9 @@ spring:
               - profile
   servlet:
     multipart:
-      max-file-size: ${MAX_FILE_SIZE:200MB}
-      max-request-size: ${MAX_REQUEST_SIZE:200MB}
+      location: ${UPLOAD_TEMP_DIR:${java.io.tmpdir}}
+      max-file-size: ${MAX_FILE_SIZE:5GB}
+      max-request-size: ${MAX_REQUEST_SIZE:5121MB}
 
 server:
   forward-headers-strategy: framework
@@ -61,6 +62,8 @@ app:
     secret: ${JWT_SECRET}
     access-token-expiration-ms: ${JWT_ACCESS_TOKEN_EXPIRATION_MS:900000}
     refresh-token-expiration-ms: ${JWT_REFRESH_TOKEN_EXPIRATION_MS:1209600000}
+  oauth:
+    exchange-code-expiration-ms: ${OAUTH_EXCHANGE_CODE_EXPIRATION_MS:60000}
   storage:
     location: ${UPLOAD_DIR:./data/uploads}
     accel-redirect-enabled: ${ACCEL_REDIRECT_ENABLED:false}

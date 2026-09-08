@@ -67,9 +67,9 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 
 .sidebar { grid-column: 1; padding: 26px 14px 20px; border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: calc(100vh - 68px); }
 .sidebar nav, .folderNav { display: grid; gap: 4px; }
-.sidebar nav button, .folderNav button { border: 0; background: transparent; min-height: 46px; border-radius: 8px; padding: 0 14px; display: flex; align-items: center; gap: 13px; cursor: pointer; text-align: left; color: #37413f; }
-.sidebar nav button svg, .folderNav button svg { font-size: 22px; color: #5c6865; }
-.sidebar nav button:hover, .folderNav button:hover { background: var(--soft); }
+.sidebar nav button, .sidebar nav a, .folderNav button { border: 0; background: transparent; min-height: 46px; border-radius: 8px; padding: 0 14px; display: flex; align-items: center; gap: 13px; cursor: pointer; text-align: left; color: #37413f; text-decoration: none; }
+.sidebar nav button svg, .sidebar nav a svg, .folderNav button svg { font-size: 22px; color: #5c6865; }
+.sidebar nav button:hover, .sidebar nav a:hover, .folderNav button:hover { background: var(--soft); }
 .sidebar nav button.active, .folderNav button.active { background: var(--accent-soft); color: var(--accent-dark); font-weight: 600; }
 .sidebar nav button.active svg, .folderNav button.active svg { color: var(--accent); }
 .sidebarDivider { height: 1px; background: var(--line); margin: 21px 14px 25px; }
@@ -420,6 +420,57 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .adminFileRow span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .adminFileHead input, .adminFileRow input { width: 16px; height: 16px; accent-color: var(--accent); }
 
+.visuallyHidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+
+.learningShell { min-height: 100vh; background: #fff; }
+.learningHeader { min-height: 68px; padding: 0 30px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 26px; }
+.learningHeader .brand { display: flex; align-items: center; gap: 8px; color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 600; }
+.learningHeader .brand:hover { color: var(--ink); }
+.learningHeader h1 { margin: 0; display: flex; align-items: center; gap: 10px; font-size: 20px; letter-spacing: -.4px; }
+.learningHeader h1 svg { color: var(--accent); }
+.learningContent { max-width: 860px; margin: 0 auto; padding: 34px 24px 60px; }
+.learningError { margin: 0 0 20px; padding: 12px 14px; border: 1px solid #f0c7c7; border-radius: 8px; color: var(--danger); background: #fdf1f1; font-size: 13px; }
+.courseDescription { color: var(--muted); margin: -12px 0 24px; }
+
+.courseCreateForm, .sectionCreateForm { display: flex; gap: 10px; margin-bottom: 28px; }
+.courseCreateForm input, .sectionCreateForm input { flex: 1; min-height: 44px; border: 1px solid #d6dcda; border-radius: 7px; padding: 0 14px; }
+.courseCreateForm input:focus-visible, .sectionCreateForm input:focus-visible { border-color: var(--accent); }
+
+.courseGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+.courseCard { display: grid; gap: 8px; padding: 18px; border: 1px solid var(--line); border-radius: 10px; color: inherit; text-decoration: none; transition: border-color .15s, transform .15s; }
+.courseCard:hover { border-color: #aab7b3; transform: translateY(-1px); }
+.courseCard strong { font-size: 15px; }
+.courseCard p { margin: 0; color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.courseStatus { width: fit-content; border-radius: 99px; padding: 3px 10px; font-size: 10px; font-weight: 700; letter-spacing: .3px; color: #596461; background: #edf1ef; }
+.courseStatus-active { color: #176552; background: #e8f6f1; }
+.courseStatus-archived { color: #8a4343; background: #faecec; }
+
+.sectionBlock { margin-bottom: 30px; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+.sectionBlock:last-child { border-bottom: 0; }
+.sectionBlockHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.sectionBlockHeader h2 { margin: 0; font-size: 16px; }
+.sectionBlockActions { display: flex; gap: 8px; }
+.sectionBlockActions button { min-height: 36px; padding: 0 12px; font-size: 12px; }
+
+.lessonList { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.lessonList li a { display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 0 10px; border-radius: 7px; color: var(--ink); text-decoration: none; }
+.lessonList li a:hover { background: var(--soft); }
+.lessonList li a svg { color: #5c6865; }
+.lessonListEmpty { color: var(--muted); font-size: 13px; margin: 0; }
+
+.writtenLessonForm { display: grid; gap: 10px; margin: 12px 0; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--soft); }
+.writtenLessonForm input, .writtenLessonForm textarea { border: 1px solid #d6dcda; border-radius: 7px; padding: 10px 12px; font-family: inherit; background: #fff; }
+.writtenLessonForm textarea { resize: vertical; }
+.writtenLessonFormActions { display: flex; justify-content: flex-end; gap: 8px; }
+
+.lessonViewer { line-height: 1.75; font-size: 15px; }
+.lessonViewer h1, .lessonViewer h2, .lessonViewer h3 { letter-spacing: -.3px; }
+.lessonViewer pre { padding: 14px; border-radius: 8px; background: var(--soft); overflow-x: auto; }
+.lessonViewer code { background: var(--soft); border-radius: 4px; padding: 1px 5px; }
+.lessonViewer pre code { padding: 0; background: none; }
+.lessonViewer img { max-width: 100%; }
+.lessonViewer blockquote { margin: 0; padding: 2px 16px; border-left: 3px solid var(--line); color: var(--muted); }
+
 @media (max-width: 920px) {
   .adminStats { grid-template-columns: repeat(2,1fr); }
   .adminUsers { overflow-x: auto; }
@@ -452,8 +503,8 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
   .profileArea { padding-right: 8px; gap: 0; }
   .profileArea > .iconButton { display: none; }
   .sidebar { padding: 18px 8px; min-height: calc(100vh - 62px); }
-  .sidebar nav button, .folderNav button { padding: 0; justify-content: center; }
-  .sidebar nav button span, .folderNav button span, .folderHeading, .storage, .sidebarDivider { display: none; }
+  .sidebar nav button, .sidebar nav a, .folderNav button { padding: 0; justify-content: center; }
+  .sidebar nav button span, .sidebar nav a span, .folderNav button span, .folderHeading, .storage, .sidebarDivider { display: none; }
   .content { padding: 24px 18px; overflow: hidden; }
   .contentHeader { align-items: center; }
   .contentHeader > div:first-child { min-width: 0; }
