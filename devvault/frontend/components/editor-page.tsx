@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 import { drawMarks, type Mark, type Point } from "@/lib/document-editing";
 
@@ -13,6 +13,7 @@ type Props = {
   page: number;
   marks: Mark[];
   tool: EditorTool;
+  penOnly: boolean;
   color: string;
   size: number;
   text: string;
@@ -21,9 +22,10 @@ type Props = {
   onActive: (page: number) => void;
   onError: (message: string) => void;
   onCrop: (crop: Crop) => void;
+  onDrawingChange: (drawing: boolean) => void;
 };
 
-export function EditorPage({ document: pdf, image, page, marks, tool, color, size, text, disabled, onChange, onActive, onError, onCrop }: Props) {
+export function EditorPage({ document: pdf, image, page, marks, tool, penOnly, color, size, text, disabled, onChange, onActive, onError, onCrop, onDrawingChange }: Props) {
   const paper = useRef<HTMLElement>(null);
   const background = useRef<HTMLCanvasElement>(null);
   const foreground = useRef<HTMLCanvasElement>(null);
@@ -35,6 +37,8 @@ export function EditorPage({ document: pdf, image, page, marks, tool, color, siz
   const [nearby, setNearby] = useState(false);
   const [displayWidth, setDisplayWidth] = useState(0);
   const [rendered, setRendered] = useState(false);
+
+  useEffect(() => () => { if (pointer.current !== null) onDrawingChange(false); }, [onDrawingChange]);
 
   useEffect(() => {
     if (!pdf) return;
@@ -110,15 +114,19 @@ export function EditorPage({ document: pdf, image, page, marks, tool, color, siz
   }
   function cancel() {
     pointer.current = null;
+    onDrawingChange(false);
     draft.current = null;
     cropStart.current = null;
     repaint();
   }
   function pointerDown(event: PointerEvent<HTMLCanvasElement>) {
     if (disabled || !rendered || tool === "read" || !event.isPrimary || event.button !== 0 || pointer.current !== null) return;
+    if (penOnly && event.pointerType === "touch") return;
+    if (event.pointerType === "pen") event.preventDefault();
     onActive(page);
     if (tool === "text" && !text.trim()) { onError("메뉴에서 추가할 텍스트를 입력해 주세요."); return; }
     pointer.current = event.pointerId;
+    onDrawingChange(true);
     event.currentTarget.setPointerCapture(event.pointerId);
     const point = position(event);
     if (tool === "crop") { cropStart.current = point; return; }
@@ -154,12 +162,13 @@ export function EditorPage({ document: pdf, image, page, marks, tool, color, siz
       repaint();
     }
     pointer.current = null;
+    onDrawingChange(false);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   }
 
-  return <article ref={paper} className="editorPaper" data-page={page} data-rendered={rendered} aria-label={`${page}페이지`} style={{ aspectRatio: `${image?.naturalWidth ?? dimensions.width} / ${image?.naturalHeight ?? dimensions.height}` }}>
+  return <article ref={paper} className="editorPaper" data-page={page} data-rendered={rendered} aria-label={`${page}페이지`} style={{ aspectRatio: `${image?.naturalWidth ?? dimensions.width} / ${image?.naturalHeight ?? dimensions.height}`, "--page-ratio": (image?.naturalWidth ?? dimensions.width) / (image?.naturalHeight ?? dimensions.height) } as CSSProperties}>
     {!rendered && <span className="editorPageLoading">{page}페이지</span>}
     <canvas ref={background} className="editorOriginal" aria-label={pdf ? `${page}페이지 원문` : "원본 이미지"} />
-    <canvas ref={foreground} className="editorInk" data-tool={tool} aria-label={`${page}페이지 필기 영역`} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={cancel} />
+    <canvas ref={foreground} className="editorInk" data-tool={tool} data-pen-only={penOnly} aria-label={`${page}페이지 필기 영역`} onPointerOver={event => { event.currentTarget.style.touchAction = penOnly && event.pointerType !== "pen" ? "pan-x pan-y pinch-zoom" : "none"; }} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={cancel} />
   </article>;
 }

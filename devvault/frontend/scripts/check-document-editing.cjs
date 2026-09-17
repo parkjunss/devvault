@@ -11,7 +11,7 @@ const loaded = new Module(filename, module);
 loaded.filename = filename;
 loaded.paths = module.paths;
 loaded._compile(compiled, filename);
-const { readMarks, drawMarks, createPdfCopy, SOURCE_ATTACHMENT, MARKS_ATTACHMENT } = loaded.exports;
+const { changeMarkHistory, readMarks, drawMarks, createPdfCopy, SOURCE_ATTACHMENT, MARKS_ATTACHMENT } = loaded.exports;
 
 (async () => {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
@@ -21,6 +21,28 @@ const { readMarks, drawMarks, createPdfCopy, SOURCE_ATTACHMENT, MARKS_ATTACHMENT
     { page: 1, tool: "pen", width: .02, color: "#ff0000", points: [{ x: .1, y: .2 }, { x: .9, y: .2 }] },
     { page: 1, tool: "erase", width: .05, color: "#000000", points: [{ x: .5, y: .1 }, { x: .5, y: .3 }] }
   ];
+  const empty = [];
+  let history = { past: [], present: empty, future: [] };
+  assert.equal(changeMarkHistory(history, { type: "undo" }), history);
+  const pen = [strokes[0]];
+  history = changeMarkHistory(history, { type: "edit", marks: pen });
+  history = changeMarkHistory(history, { type: "edit", marks: strokes });
+  history = changeMarkHistory(history, { type: "undo" });
+  assert.equal(history.present, pen, "undo eraser restores the exact pen snapshot");
+  history = changeMarkHistory(history, { type: "undo" });
+  assert.equal(history.present, empty, "undo returns to the saved baseline by reference");
+  history = changeMarkHistory(history, { type: "redo" });
+  history = changeMarkHistory(history, { type: "redo" });
+  assert.equal(history.present, strokes);
+  history = changeMarkHistory(history, { type: "undo" });
+  const highlighted = [...pen, { ...strokes[0], page: 2, tool: "highlight" }];
+  history = changeMarkHistory(history, { type: "edit", marks: highlighted });
+  assert.equal(history.future.length, 0, "a new edit invalidates redo");
+  assert.equal(changeMarkHistory(history, { type: "redo" }), history);
+  for (let index = 0; index < 110; index++) history = changeMarkHistory(history, { type: "edit", marks: [...highlighted] });
+  assert.equal(history.past.length, 100);
+  history = changeMarkHistory(history, { type: "reset", marks: pen });
+  assert.deepEqual(history, { past: [], present: pen, future: [] });
   assert.deepEqual(readMarks(JSON.stringify(strokes), 1), strokes);
   drawMarks(ink.getContext("2d"), strokes, 400, 600);
   assert.equal(ink.getContext("2d").getImageData(200, 120, 1, 1).data[3], 0);

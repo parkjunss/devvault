@@ -8,6 +8,10 @@
 .editorPages { min-height: 100%; margin: 0 auto; }
 .editorPaper { position: relative; width: 100%; margin: 0 0 8px; background: white; box-shadow: 0 2px 6px #24344825; }
 .editorPaper:last-child { margin-bottom: 0; }
+.editorPages[data-scale=page] .editorPaper { width: min(100%, calc((100dvh - 16px) * var(--page-ratio))); margin: 8px auto; }
+@media (hover: hover) and (pointer: fine) {
+  .editorPages[data-scale=auto] .editorPaper { width: min(100%, calc((100dvh - 16px) * var(--page-ratio))); margin: 8px auto; }
+}
 .editorPaper canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
 .editorInk { touch-action: none; cursor: crosshair; }
 .editorInk[data-tool=read] { pointer-events: none; touch-action: auto; cursor: default; }
@@ -16,7 +20,12 @@
 .editorLoading { margin: 0; padding: 80px 24px; text-align: center; }
 .fileEditor .editorMenuButton { position: absolute; z-index: 5; left: max(12px, env(safe-area-inset-left)); top: max(12px, env(safe-area-inset-top)); width: 46px; height: 46px; padding: 0; display: grid; place-items: center; box-shadow: 0 2px 12px #18253c20; background: #fffffff0; }
 .editorUnsavedDot { position: absolute; width: 8px; height: 8px; border-radius: 50%; top: 5px; right: 5px; background: #d67900; }
-.fileEditor .editorReadingButton { position: absolute; z-index: 5; right: max(12px, env(safe-area-inset-right)); top: max(12px, env(safe-area-inset-top)); box-shadow: 0 2px 12px #18253c20; font-size: 13px; }
+.editorQuickTools { position: absolute; z-index: 5; right: max(12px, env(safe-area-inset-right)); top: max(12px, env(safe-area-inset-top)); display: flex; gap: 6px; }
+.editorQuickTools button { display: grid; place-items: center; min-width: 44px; padding: 8px; box-shadow: 0 2px 12px #18253c20; }
+.fileEditor .editorReadingButton { font-size: 13px; }
+.editorHistoryButtons { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.editorHistoryButtons button { display: grid; place-items: center; }
+.editorHistoryButtons span { font-size: 13px; }
 .editorDrawer { position: fixed; inset: 0 auto 0 0; width: min(370px, 100%); max-width: 100%; height: 100%; max-height: 100dvh; margin: 0; padding: max(18px, env(safe-area-inset-top)) 18px max(18px, env(safe-area-inset-bottom)); border: 0; box-shadow: 4px 0 24px #18253c25; overflow-y: auto; overscroll-behavior: contain; color: #18253c; }
 .editorDrawer::backdrop { background: #18253c45; }
 .editorDrawer > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -43,3 +52,5 @@
 .editorMarkList > div { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border-bottom: 1px solid #d1dbe8; padding: 8px 0; }
 .editorMarkList span { flex: 1; min-width: 60px; overflow-wrap: anywhere; white-space: pre-wrap; }
 .editorHome { display: inline-block; padding: 12px 0; color: #2459cc; }
+
+.editorInk[data-pen-only=true] { touch-action: pan-x pan-y pinch-zoom; }
