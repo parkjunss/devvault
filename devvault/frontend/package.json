@@ -11,13 +11,19 @@
     "test:subtitles": "node scripts/check-subtitles.cjs",
     "test:refresh": "node scripts/check-refresh-single-flight.cjs",
     "test:oauth": "node scripts/check-oauth-exchange.cjs",
-    "test:upload": "node scripts/check-upload-progress.cjs"
+    "test:upload": "node scripts/check-upload-progress.cjs",
+    "test:editing": "node scripts/check-document-editing.cjs",
+    "test:editor-browser": "node scripts/check-editor-browser.cjs",
+    "predev": "node scripts/copy-pdf-worker.cjs",
+    "prebuild": "node scripts/copy-pdf-worker.cjs"
   },
   "dependencies": {
     "@fontsource-variable/noto-sans-kr": "^5.2.8",
     "@phosphor-icons/react": "^2.1.10",
     "katex": "^0.18.7",
     "next": "^16.2.10",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^6.3.289",
     "react": "19.1.1",
     "react-dom": "19.1.1",
     "react-markdown": "^10.1.0",

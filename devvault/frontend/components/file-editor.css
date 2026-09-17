@@ -1,0 +1,27 @@
+.fileEditor { max-width: 1440px; margin: auto; padding: 24px; color: #18253c; }
+.fileEditor > header { display: flex; justify-content: space-between; gap: 20px; align-items: center; }
+.fileEditor h1 { font-size: 22px; overflow-wrap: anywhere; margin: 12px 0; }
+.fileEditor p { line-height: 1.6; }
+.fileEditor button, .fileEditor select { cursor: pointer; border: 1px solid #bac8da; border-radius: 8px; padding: 9px 12px; background: white; color: #18253c; font: inherit; }
+.fileEditor button:disabled { opacity: .5; cursor: default; }
+.fileEditor button[aria-pressed=true] { background: #e6eeff; border-color: #2459cc; color: #1749b6; }
+.fileEditor :focus-visible { outline: 3px solid #2459cc; outline-offset: 3px; }
+.fileEditor > header .primaryButton { background: #2459cc; color: white; flex-shrink: 0; }
+.editorToolbar { margin-top: 20px; border: 1px solid #d1dbe8; border-radius: 12px; padding: 16px; }
+.editorTools, .editorNavigation { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 8px 0; }
+.editorToolbar label, .editorNavigation label { display: flex; gap: 8px; align-items: center; }
+.editorToolbar input[type=number] { width: 90px; padding: 8px; }
+.editorToolbar input[type=range] { width: 100px; }
+.editorToolbar textarea { flex: 1; margin-top: 12px; min-height: 65px; padding: 10px; }
+.editorNavigation { justify-content: center; padding-top: 12px; }
+.editorHint { color: #52637b; font-size: 14px; }
+.editorViewport { overflow: auto; background: #e5eaf1; border-radius: 10px; padding: 20px; max-height: 75vh; }
+.editorPaper { position: relative; margin: auto; background: white; box-shadow: 0 2px 12px #24344822; flex-shrink: 0; }
+.editorPaper canvas { display: block; width: 100%; height: 100%; }
+.editorPaper .editorInk { position: absolute; inset: 0; touch-action: none; cursor: crosshair; }
+.editorError { background: #fff0f0; color: #9b2020; padding: 12px; border-radius: 8px; }
+.editorSuccess { background: #e7f7ef; padding: 12px; border-radius: 8px; }
+.editorMarkList h2 { font-size: 17px; }
+.editorMarkList > div { display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #d1dbe8; padding: 8px; }
+.editorMarkList span { flex: 1; overflow-wrap: anywhere; white-space: pre-wrap; }
+@media (max-width: 640px) { .fileEditor { padding: 12px; } .fileEditor > header { align-items: flex-start; flex-direction: column; } .editorViewport { padding: 8px; } .editorToolbar { padding: 8px; } }

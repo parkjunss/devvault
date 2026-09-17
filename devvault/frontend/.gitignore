@@ -4,3 +4,5 @@ node_modules/
 .env.local
 npm-debug.log*
 *.tsbuildinfo
+public/pdf.worker.min.mjs
+public/pdf-assets/

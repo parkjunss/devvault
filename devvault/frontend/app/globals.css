@@ -483,11 +483,16 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
   .adminUsersHeader form { width: 100%; }
 }
 
+@media (max-width: 1366px) {
+  .vaultShell.hasPreview { grid-template-columns: 218px minmax(0,1fr); grid-template-rows: 68px auto 1fr; }
+  .vaultShell.hasPreview .sidebar { grid-row: 2 / 4; }
+  .vaultShell.hasPreview .content { grid-row: 2; }
+  .previewPanel:not(.expanded) { grid-column: 2; grid-row: 3; position: static; width: auto; height: auto; min-height: 0; border-left: 0; border-top: 1px solid var(--line); overflow: visible; }
+}
+
 @media (max-width: 1180px) {
-  .vaultShell.hasPreview { grid-template-columns: 218px minmax(0,1fr); }
   .topbar { grid-template-columns: 218px minmax(280px, 560px) 1fr; }
   .brand { padding-left: 22px; }
-  .previewPanel { position: fixed; z-index: 15; right: 0; top: 68px; width: 360px; background: #fff; box-shadow: -12px 0 32px rgba(25,37,34,.1); }
   .sidebar { grid-column: 1; }
   .content { grid-column: 2; }
   .recentCard > img, .recentPlaceholder { height: 160px; }
@@ -495,6 +500,7 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 
 @media (max-width: 780px) {
   .vaultShell, .vaultShell.hasPreview { grid-template: 62px 1fr / 70px minmax(0,1fr); }
+  .vaultShell.hasPreview { grid-template-rows: 62px auto 1fr; }
   .topbar { height: 62px; grid-template-columns: 70px minmax(0,1fr) auto; }
   .brand { padding: 0; justify-content: center; }
   .brand strong, .profileButton span, .profileButton > svg:not(.profileAvatar) { display: none; }
@@ -519,7 +525,8 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
   .tableHeader, .fileRow { grid-template-columns: 24px minmax(0,1fr) 42px; column-gap: 8px; }
   .tableHeader > :nth-child(3), .tableHeader > :nth-child(4), .tableHeader > :nth-child(5),
   .fileRow > :nth-child(3), .fileRow > :nth-child(4), .fileRow > :nth-child(5) { display: none; }
-  .previewPanel, .previewPanel.expanded { inset: 62px 0 0; z-index: 25; width: auto; height: auto; min-height: 0; padding: 18px; border: 0; border-radius: 0; box-shadow: none; }
+  .previewPanel { padding: 18px; }
+  .previewPanel.expanded { inset: 62px 0 0; z-index: 25; width: auto; height: auto; min-height: 0; border: 0; border-radius: 0; box-shadow: none; }
   .previewPanel > header { grid-template-columns: 24px minmax(0,1fr) 38px 38px; margin-bottom: 16px; }
   .previewPanel > header strong { min-width: 0; }
   .previewFrame, .previewFrame img, .previewFrame iframe,

@@ -144,6 +144,7 @@ export function VaultApp() {
   const [subtitle, setSubtitle] = useState<{ fileId: number; url: string; name: string } | null>(null);
   const [actionDialog, setActionDialog] = useState<ActionDialog | null>(null);
   const [actionPending, setActionPending] = useState(false);
+  const [bulkPending, setBulkPending] = useState(false);
   const [draggedFileId, setDraggedFileId] = useState<number | null>(null);
   const [dropFolderId, setDropFolderId] = useState<number | null>(null);
 
@@ -442,6 +443,25 @@ export function VaultApp() {
   function deleteFile(file: VaultFile) {
     setOpenFileMenuId(null);
     setActionDialog({ action: "delete", target: { type: "file", item: file }, value: "", permanent: nav === "trash" });
+  }
+
+  async function deleteSelectedFiles() {
+    if (bulkPending || !selectedIds.size || !window.confirm(`${selectedIds.size}개 파일을 휴지통으로 이동할까요?`)) return;
+    setBulkPending(true);
+    try {
+      const response = await apiFetch("/api/files/bulk-delete", {
+        method: "POST", body: JSON.stringify({ fileIds: [...selectedIds] })
+      });
+      if (!response.ok) throw new Error("선택한 파일을 삭제하지 못했습니다. 목록을 새로고침한 뒤 다시 시도해 주세요.");
+      const count = selectedIds.size;
+      setSelected(null);
+      await load();
+      notify(`${count}개 파일을 휴지통으로 이동했습니다.`);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "삭제 요청에 실패했습니다.");
+    } finally {
+      setBulkPending(false);
+    }
   }
 
   async function restoreFile(file: VaultFile) {
@@ -773,7 +793,8 @@ export function VaultApp() {
             {preparedDownload && preparedDownload.fileIds.length === selectedIds.size && preparedDownload.fileIds.every(id => selectedIds.has(id))
               ? <a className="preparedDownloadLink" href={preparedDownload.url}><DownloadSimple />다운로드 열기</a>
               : <button type="button" disabled={downloadPending} onClick={() => startDownload([...selectedIds])}><DownloadSimple />{downloadPending ? "준비 중..." : "다운로드"}</button>}
-            <button type="button" onClick={() => setSelectedIds(new Set())}><X />선택 해제</button>
+            <button type="button" disabled={bulkPending} onClick={deleteSelectedFiles}><Trash />{bulkPending ? "삭제 중..." : "선택 삭제"}</button>
+            <button type="button" disabled={bulkPending} onClick={() => setSelectedIds(new Set())}><X />선택 해제</button>
           </div>
         </div>}
         {error && <div className="stateMessage errorState">{error}<button onClick={load}>다시 시도</button></div>}
@@ -858,6 +879,7 @@ export function VaultApp() {
         <div className={`previewFrame ${fileType(selected)}`}>
           {previewText !== null ? <pre>{previewText || "내용이 없습니다."}</pre> : previewUrl && fileType(selected) === "pdf" ? <div className="pdfDocument"><a href={previewUrl} target="_blank" rel="noopener noreferrer"><ArrowsOut />새 탭에서 전체 문서 보기</a><iframe src={previewUrl} title={`${selected.originalName} 미리보기`} /></div> : previewUrl && fileType(selected) === "audio" ? <audio controls src={previewUrl} /> : previewUrl && fileType(selected) === "video" ? <VideoPlayer src={previewUrl} subtitleUrl={subtitleUrl} subtitleName={subtitle?.name} onSubtitleFile={loadSubtitle} onRemoveSubtitle={() => setSubtitle(null)} /> : previewUrl ? <Image unoptimized src={previewUrl} alt={`${selected.originalName} 미리보기`} width={640} height={820} /> : <FileGlyph file={selected} size={48} />}
         </div>
+        {nav !== "trash" && ["pdf", "image"].includes(fileType(selected)) && <a className="secondaryButton" href={`/files/${selected.id}/edit`} target="_blank" rel="noopener noreferrer"><PencilSimple />새 탭에서 편집</a>}
         <dl>
           <div><dt>유형</dt><dd>{selected.contentType || "알 수 없음"}</dd></div>
           <div><dt>크기</dt><dd>{formatSize(selected.size)}</dd></div>
