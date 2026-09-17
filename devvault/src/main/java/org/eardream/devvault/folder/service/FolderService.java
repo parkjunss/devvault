@@ -67,9 +67,12 @@ public class FolderService {
     public void delete(String ownerEmail, Long folderId) {
         Folder folder = findOwned(folderId, ownerEmail);
         if (folderRepository.existsByOwnerEmailAndParentId(ownerEmail, folderId)
-                || fileRepository.existsByOwnerEmailAndFolderId(ownerEmail, folderId)) {
+                || fileRepository.existsByOwnerEmailAndFolderIdAndDeletedAtIsNull(ownerEmail, folderId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "비어 있는 폴더만 삭제할 수 있습니다.");
         }
+        fileRepository.findAllByOwnerEmailAndFolderIdAndDeletedAtIsNotNull(ownerEmail, folderId)
+                .forEach(file -> file.moveTo(null));
+        fileRepository.flush();
         folderRepository.delete(folder);
     }
 

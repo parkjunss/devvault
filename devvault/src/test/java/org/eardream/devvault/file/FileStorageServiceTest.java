@@ -42,6 +42,23 @@ class FileStorageServiceTest {
     Path tempDir;
 
     @Test
+    void bulkDeleteValidatesAllOwnersBeforeMutatingAndAcceptsDuplicateIds() {
+        StoredFileRepository files = mock(StoredFileRepository.class);
+        StoredFile first = StoredFile.builder().id(1L).build();
+        StoredFile second = StoredFile.builder().id(2L).build();
+        when(files.findByIdAndOwnerEmail(1L, "owner@example.com")).thenReturn(Optional.of(first));
+        when(files.findByIdAndOwnerEmail(2L, "owner@example.com")).thenReturn(Optional.of(second));
+        FileStorageService storage = service(files, mock(UserRepository.class));
+
+        assertThrows(ResponseStatusException.class,
+                () -> storage.softDeleteMany("owner@example.com", List.of(1L, 99L)));
+        assertFalse(first.isDeleted());
+        storage.softDeleteMany("owner@example.com", List.of(1L, 2L, 1L));
+        assertTrue(first.isDeleted());
+        assertTrue(second.isDeleted());
+    }
+
+    @Test
     void uploadsUsingServerGeneratedNameAndChecksum() throws Exception {
         StoredFileRepository fileRepository = mock(StoredFileRepository.class);
         UserRepository userRepository = mock(UserRepository.class);

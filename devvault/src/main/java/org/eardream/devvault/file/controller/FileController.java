@@ -8,6 +8,7 @@ import org.eardream.devvault.fileTag.controller.TagController;
 import tools.jackson.databind.JsonNode;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import org.springframework.core.io.InputStreamResource;
@@ -130,7 +131,7 @@ public class FileController {
 
     @PostMapping("/download-tickets")
     DownloadTicketResponse downloadTicket(@AuthenticationPrincipal Jwt jwt,
-                                          @Valid @RequestBody DownloadTicketRequest request) {
+                                          @Valid @RequestBody FileIdsRequest request) {
         String email = jwt.getSubject();
         fileStorageService.downloads(email, request.fileIds());
         String token = fileAccessTokenService.issueDownload(email, request.fileIds());
@@ -223,6 +224,13 @@ public class FileController {
     @DeleteMapping("/{id}")
     ResponseEntity<Void> softDelete(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
         fileStorageService.softDelete(jwt.getSubject(), id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/bulk-delete")
+    ResponseEntity<Void> softDeleteMany(@AuthenticationPrincipal Jwt jwt,
+                                       @Valid @RequestBody FileIdsRequest request) {
+        fileStorageService.softDeleteMany(jwt.getSubject(), request.fileIds());
         return ResponseEntity.noContent().build();
     }
 
@@ -334,8 +342,8 @@ public class FileController {
     public record PlaybackUrlResponse(String url) {
     }
 
-    public record DownloadTicketRequest(
-            @NotEmpty @Size(max = 100) List<@Positive Long> fileIds) {
+    public record FileIdsRequest(
+            @NotEmpty @Size(max = 100) List<@NotNull @Positive Long> fileIds) {
     }
 
     public record DownloadTicketResponse(String url) {

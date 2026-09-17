@@ -18,7 +18,9 @@ public interface StoredFileRepository extends JpaRepository<StoredFile, Long> {
 
     Page<StoredFile> findAllByOwnerEmailAndFolderIdAndDeletedAtIsNull(String email, Long folderId, Pageable pageable);
 
-    boolean existsByOwnerEmailAndFolderId(String email, Long folderId);
+    boolean existsByOwnerEmailAndFolderIdAndDeletedAtIsNull(String email, Long folderId);
+
+    List<StoredFile> findAllByOwnerEmailAndFolderIdAndDeletedAtIsNotNull(String email, Long folderId);
 
     Page<StoredFile> findAllByOwnerEmailAndDeletedAtIsNotNull(String email, Pageable pageable);
 

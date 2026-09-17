@@ -166,7 +166,7 @@ class FolderServiceTest {
         String email = "owner@example.com";
         Folder folder = Folder.builder().id(10L).name("not-empty").build();
         when(folderRepository.findByIdAndOwnerEmail(10L, email)).thenReturn(Optional.of(folder));
-        when(fileRepository.existsByOwnerEmailAndFolderId(email, 10L)).thenReturn(true);
+        when(fileRepository.existsByOwnerEmailAndFolderIdAndDeletedAtIsNull(email, 10L)).thenReturn(true);
         FolderService service = new FolderService(folderRepository, fileRepository, mock(UserRepository.class));
 
         ResponseStatusException exception = assertThrows(ResponseStatusException.class,
@@ -174,5 +174,25 @@ class FolderServiceTest {
 
         assertEquals(409, exception.getStatusCode().value());
         verify(folderRepository, never()).delete(folder);
+    }
+
+    @Test
+    void detachesTrashedFilesBeforeDeletingVisiblyEmptyFolder() {
+        FolderRepository folders = mock(FolderRepository.class);
+        StoredFileRepository files = mock(StoredFileRepository.class);
+        String email = "owner@example.com";
+        Folder folder = Folder.builder().id(10L).name("empty").build();
+        StoredFile trashed = StoredFile.builder().folder(folder).build();
+        trashed.softDelete();
+        when(folders.findByIdAndOwnerEmail(10L, email)).thenReturn(Optional.of(folder));
+        when(files.findAllByOwnerEmailAndFolderIdAndDeletedAtIsNotNull(email, 10L)).thenReturn(List.of(trashed));
+
+        new FolderService(folders, files, mock(UserRepository.class)).delete(email, 10L);
+
+        assertNull(trashed.getFolder());
+        trashed.restore();
+        assertNull(trashed.getFolder());
+        verify(files).flush();
+        verify(folders).delete(folder);
     }
 }

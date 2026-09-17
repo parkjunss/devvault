@@ -131,6 +131,13 @@ public class FileStorageService {
         return storedFileRepository.findAllByOwnerEmailAndDeletedAtIsNull(ownerEmail, pageable);
     }
 
+    @Transactional
+    public void softDeleteMany(String ownerEmail, List<Long> fileIds) {
+        // Resolve every owned file before changing anything: an invalid ID cannot cause a partial deletion.
+        List<StoredFile> files = fileIds.stream().distinct().map(id -> get(ownerEmail, id)).toList();
+        files.forEach(StoredFile::softDelete);
+    }
+
     @Transactional(readOnly = true)
     public Page<StoredFile> search(String ownerEmail, String requestedName, String requestedExtension,
                                    String requestedTag, Boolean favorite, boolean rootOnly, Pageable pageable) {
