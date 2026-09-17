@@ -80,6 +80,25 @@ public class FileController {
         return ResponseEntity.status(HttpStatus.CREATED).body(FileResponse.from(storedFile));
     }
 
+    @PostMapping("/{id}/versions")
+    FileResponse saveVersion(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
+                             @RequestParam long expectedVersion, @RequestParam("file") MultipartFile file) {
+        return FileResponse.from(fileStorageService.saveVersion(jwt.getSubject(), id, expectedVersion, file));
+    }
+
+    @GetMapping("/{id}/versions")
+    List<FileStorageService.RevisionInfo> versions(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
+        return fileStorageService.revisions(jwt.getSubject(), id);
+    }
+
+    @PostMapping("/{id}/versions/{version}/restore")
+    FileResponse restoreVersion(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id, @PathVariable long version,
+                                @Valid @RequestBody RestoreVersionRequest request) {
+        return FileResponse.from(fileStorageService.restoreVersion(jwt.getSubject(), id, version, request.expectedVersion()));
+    }
+
+    public record RestoreVersionRequest(@Positive long expectedVersion) {}
+
     @GetMapping
     Page<FileResponse> list(@AuthenticationPrincipal Jwt jwt,
                             @RequestParam(required = false) String name,
@@ -310,17 +329,17 @@ public class FileController {
     }
 
     public record FileResponse(Long id, String originalName, Long folderId, String contentType, long size,
-                               String checksum, boolean favorite, Instant createdAt) {
+                               String checksum, boolean favorite, Instant createdAt, long version) {
         public static FileResponse from(StoredFile file) {
             return new FileResponse(file.getId(), file.getOriginalName(),
                     file.getFolder() == null ? null : file.getFolder().getId(), file.getContentType(),
-                    file.getSize(), file.getChecksum(), file.isFavorite(), file.getCreatedAt());
+                    file.getSize(), file.getChecksum(), file.isFavorite(), file.getCreatedAt(), file.getVersion());
         }
     }
 
     public record FileDetailResponse(Long id, String originalName, Long folderId, String contentType, long size,
                                      String checksum, boolean favorite, Instant createdAt,
-                                     List<TagController.TagResponse> tags) {
+                                     List<TagController.TagResponse> tags, long version) {
         public static FileDetailResponse from(StoredFile file) {
             List<TagController.TagResponse> tags = file.getTags().stream()
                     .sorted(Comparator.comparing(Tag::getName, String.CASE_INSENSITIVE_ORDER))
@@ -328,7 +347,7 @@ public class FileController {
                     .toList();
             return new FileDetailResponse(file.getId(), file.getOriginalName(),
                     file.getFolder() == null ? null : file.getFolder().getId(), file.getContentType(),
-                    file.getSize(), file.getChecksum(), file.isFavorite(), file.getCreatedAt(), tags);
+                    file.getSize(), file.getChecksum(), file.isFavorite(), file.getCreatedAt(), tags, file.getVersion());
         }
     }
 

@@ -20,17 +20,27 @@ const { PDFDocument, degrees } = require("pdf-lib");
     const original = Buffer.from(await pdf.save());
     const image = Buffer.from(await page.evaluate(() => { const c = document.createElement("canvas"); c.width = 400; c.height = 300; const ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 400, 300); return c.toDataURL().split(",")[1]; }), "base64");
     const files = new Map([[1, { name: "sample.pdf", type: "application/pdf", bytes: original }], [2, { name: "sample.png", type: "image/png", bytes: image }]]);
-    let lastId = 2;
-    const metadata = (id, value) => ({ id, originalName: value.name, contentType: value.type, size: value.bytes.length, folderId: 7, createdAt: new Date().toISOString() });
+    const history = new Map([[1, []], [2, []]]);
+    const metadata = (id, value) => ({ id, originalName: value.name, contentType: value.type, size: value.bytes.length, folderId: 7, version: value.version ?? 1, checksum: require("node:crypto").createHash("sha256").update(value.bytes).digest("hex"), createdAt: new Date().toISOString() });
     const routeApi = async route => {
       const request = route.request(), pathname = new URL(request.url()).pathname;
-      if (pathname === "/api/files" && request.method() === "POST") {
+      const versionRoute = pathname.match(/^\/api\/files\/(\d+)\/versions(?:\/(\d+)\/restore)?$/);
+      if (versionRoute) {
+        const id = Number(versionRoute[1]), current = files.get(id), prior = history.get(id);
+        if (request.method() === "GET") return route.fulfill({json: [current, ...prior.slice().reverse()].map((value,index) => ({...metadata(id,value),current:index===0}))});
+        if (versionRoute[2]) {
+          if (request.postDataJSON().expectedVersion !== (current.version ?? 1)) return route.fulfill({status:409,json:{message:"다른 탭에서 파일을 변경했습니다."}});
+          const target = prior.find(value => (value.version ?? 1) === Number(versionRoute[2]));
+          prior.push(current);
+          const value = {...target, version:(current.version ?? 1)+1}; files.set(id,value);
+          return route.fulfill({json:metadata(id,value)});
+        }
         const form = await new Request("http://localhost/upload", { method: "POST", headers: { "content-type": request.headers()["content-type"] }, body: request.postDataBuffer() }).formData();
-        assert.equal(form.get("folderId"), "7");
-        const file = form.get("file"), id = ++lastId;
-        const value = { name: file.name, type: file.type, bytes: Buffer.from(await file.arrayBuffer()) };
-        files.set(id, value);
-        return route.fulfill({ status: 201, json: metadata(id, value) });
+        if (Number(form.get("expectedVersion")) !== (current.version ?? 1)) return route.fulfill({status:409,json:{message:"다른 탭에서 파일을 변경했습니다."}});
+        const file = form.get("file");
+        const value = { name: current.name, type: file.type, bytes: Buffer.from(await file.arrayBuffer()),version:(current.version ?? 1)+1 };
+        prior.push(current); files.set(id,value);
+        return route.fulfill({json:metadata(id,value)});
       }
       const match = pathname.match(/^\/api\/files\/(\d+)(\/download)?$/);
       if (match && files.has(Number(match[1]))) {
@@ -74,7 +84,7 @@ const { PDFDocument, degrees } = require("pdf-lib");
       return ink(number).evaluate((canvas,p) => canvas.getContext("2d").getImageData(Math.floor(canvas.width*p.x),Math.floor(canvas.height*p.y),1,1).data[3], {x,y});
     }
     async function save() {
-      await menu(); await page.getByRole("button", { name: "편집본 저장", exact: true }).click();
+      await menu(); await page.getByRole("button", { name: "버전 저장", exact: true }).click();
       await page.getByRole("dialog").locator(".editorSuccess").waitFor();
     }
     await ready(1);
@@ -89,7 +99,7 @@ const { PDFDocument, degrees } = require("pdf-lib");
     await touch.send("Input.dispatchTouchEvent", {type:"touchEnd",touchPoints:[]});
     await page.waitForFunction(() => document.querySelector(".editorViewport").scrollTop > 100);
     await scrollTo(1);
-    await menu(); assert.equal(await page.getByRole("button",{name:"편집본 저장",exact:true}).isDisabled(),true);
+    await menu(); assert.equal(await page.getByRole("button",{name:"버전 저장",exact:true}).isDisabled(),true);
     await page.keyboard.press("Escape");
     await page.getByRole("dialog").waitFor({state:"hidden"});
     assert.equal(await page.getByRole("button",{name:"편집 메뉴 열기",exact:true}).evaluate(e=>e===document.activeElement),true);
@@ -119,14 +129,15 @@ const { PDFDocument, degrees } = require("pdf-lib");
     await choose("읽기 / 스크롤"); await scrollTo(1);
     await page.keyboard.press("Control+z");
     await page.waitForFunction(() => Math.abs(document.querySelector('.editorPaper[data-page="2"]').getBoundingClientRect().top)<2);
+    await page.waitForFunction(() => { const canvas=document.querySelector('.editorPaper[data-page="2"] .editorInk'); return canvas.getContext("2d").getImageData(Math.floor(canvas.width*.35),Math.floor(canvas.height*.2),1,1).data[3]===0; });
     assert.equal(await alpha(2,.35,.2),0,"undo follows the last edit across pages");
     await page.keyboard.press("Control+y");
     assert.ok(await alpha(2,.35,.2)>0,"highlight redo restores the stroke");
     await choose("텍스트"); await page.getByRole("textbox",{name:"추가할 텍스트"}).fill("한글 메모");
     await page.getByRole("button",{name:"문서에 텍스트 배치"}).click();
     await ink(2).click({position:{x:80,y:180}});
-    await save(); assert.equal(lastId,3); assert.deepEqual(files.get(1).bytes,original);
-    await ready(3); assert.equal(await alpha(1,.35,.2),0); assert.ok(await alpha(1,.24,.2)>0);
+    await save(); assert.equal(files.size,2); assert.equal(files.get(1).version,2); assert.deepEqual(history.get(1)[0].bytes,original);
+    await ready(1); assert.equal(await alpha(1,.35,.2),0); assert.ok(await alpha(1,.24,.2)>0);
     await scrollTo(2); await menu(); await page.locator(".editorMarkList summary").click();
     assert.equal(await page.locator(".editorMarkList > div").count(),2);
     await page.locator(".editorMarkList > div").first().getByRole("button",{name:"삭제",exact:true}).click();
@@ -134,7 +145,7 @@ const { PDFDocument, degrees } = require("pdf-lib");
     assert.equal(await page.locator(".editorMarkList > div").count(),2,"undo restores deleted annotations");
     await page.getByRole("button",{name:"다시 실행",exact:true}).click();
     assert.equal(await page.locator(".editorMarkList > div").count(),1);
-    await save(); await ready(4); await scrollTo(2);
+    await save(); await ready(1); await scrollTo(2);
     await menu(); assert.equal(await page.locator(".editorMarkList > div").count(),1);
     await page.getByRole("button",{name:"편집 메뉴 닫기"}).click();
     await scrollTo(1);
@@ -167,15 +178,24 @@ const { PDFDocument, degrees } = require("pdf-lib");
     await choose("영역 드래그로 자르기"); await stroke(1,.1,.1,.9,.9);
     await page.waitForFunction(() => document.querySelector('.editorPaper[data-page="1"]').dataset.rendered==="true" && !document.querySelector("dialog").open);
     await menu(); assert.equal(await page.getByLabel("가로(px)").inputValue(),"160");
-    await save(); assert.equal(files.get(5).type,"image/png"); assert.deepEqual(files.get(2).bytes,image);
-    await ready(5);
+    await save(); assert.equal(files.get(2).type,"image/png"); assert.deepEqual(history.get(2)[0].bytes,image);
+    await ready(2);
     await page.setViewportSize({width:390,height:844});
     await menu();
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth<=window.innerWidth),true);
     assert.equal(await page.getByLabel("가로(px)").inputValue(),"160");
+    // Rollback keeps one logical file and preserves the replaced current version.
+    await page.getByRole("button",{name:"v1 복원",exact:true}).click();
+    await page.waitForEvent("load");
+    await page.waitForFunction(() => document.querySelector('.editorPaper[data-page="1"]')?.dataset.rendered === "true");
+    assert.equal(files.get(2).version,3);
+    assert.deepEqual(files.get(2).bytes,image);
+    assert.equal(files.size,2);
+    assert.equal(history.get(2).length,2);
     // Image transforms are reversible, including the annotations flattened into them.
     await ready(2); await choose("펜"); await stroke(1);
     await menu(); await page.getByRole("button",{name:"오른쪽 90° 회전"}).click();
+    await page.getByRole("dialog").waitFor({state:"hidden"});
     await menu();
     assert.equal(await page.getByLabel("가로(px)").inputValue(),"300");
     await page.getByRole("button",{name:"되돌리기",exact:true}).click();
@@ -254,8 +274,23 @@ const { PDFDocument, degrees } = require("pdf-lib");
     await desktopFirst.evaluate(element=>element.scrollIntoView({block:"start"}));
     fit=await desktopFirst.boundingBox();
     assert.ok(fit.y+fit.height<=720,"page fit responds to window resizing");
+    // Another tab saves first: stale editing remains available and does not overwrite its version.
+    const serverVersion = files.get(1);
+    history.get(1).push(serverVersion);
+    files.set(1,{...serverVersion,version:serverVersion.version+1});
+    await desktop.getByRole("button",{name:"편집 메뉴 열기",exact:true}).click();
+    await desktop.getByRole("button",{name:"펜",exact:true}).click();
+    const desktopInk=desktopFirst.locator(".editorInk"), box=await desktopInk.boundingBox();
+    await desktop.mouse.move(box.x+box.width*.2,box.y+box.height*.3); await desktop.mouse.down();
+    await desktop.mouse.move(box.x+box.width*.5,box.y+box.height*.3); await desktop.mouse.up();
+    await desktop.getByRole("button",{name:"편집 메뉴 열기",exact:true}).click();
+    await desktop.getByRole("button",{name:"버전 저장",exact:true}).click();
+    await desktop.getByText("저장 실패: 다른 탭에서 파일을 변경했습니다.",{exact:true}).waitFor();
+    assert.equal(await desktop.locator(".editorUnsavedDot").count(),1);
+    assert.equal(files.get(1).version,serverVersion.version+1);
+    assert.equal(files.size,2);
     await desktopContext.close();
     assert.deepEqual(errors, []);
-    console.log("PASS: tablet edge-to-edge continuous PDF, hidden drawer, native touch scroll, lazy pages, partial erasure/save/reopen, Korean text, image transforms, portrait/landscape/zoom, original preservation, undo/redo shortcuts and branching, desktop page fit, local draft recovery/discard, image transform history, pen-only drawing and finger scrolling");
+    console.log("PASS: tablet edge-to-edge continuous PDF, hidden drawer, native touch scroll, lazy pages, partial erasure/save/reopen, Korean text, image transforms, portrait/landscape/zoom, original preservation, undo/redo shortcuts and branching, desktop page fit, local draft recovery/discard, image transform history, pen-only drawing and finger scrolling, single-file versions and rollback");
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

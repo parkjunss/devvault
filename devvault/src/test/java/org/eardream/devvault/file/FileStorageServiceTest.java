@@ -86,7 +86,7 @@ class FileStorageServiceTest {
         when(userRepository.findByEmailForUpdate(user.getEmail())).thenReturn(Optional.of(user));
         when(folderRepository.findByIdAndOwnerEmail(10L, user.getEmail())).thenReturn(Optional.of(folder));
         when(fileRepository.saveAndFlush(any(StoredFile.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        FileStorageService service = new FileStorageService(fileRepository, userRepository, folderRepository, tempDir.toString());
+        FileStorageService service = new FileStorageService(fileRepository, userRepository, folderRepository, mock(org.eardream.devvault.file.repository.FileRevisionRepository.class), tempDir.toString());
 
         StoredFile result = service.upload(user.getEmail(),
                 new MockMultipartFile("file", "hello.txt", "text/plain", "hello".getBytes()), 10L);
@@ -230,7 +230,7 @@ class FileStorageServiceTest {
         when(fileRepository.findByIdAndOwnerEmail(7L, email)).thenReturn(Optional.of(file));
         when(folderRepository.findByIdAndOwnerEmail(10L, email)).thenReturn(Optional.of(folder));
         FileStorageService service = new FileStorageService(fileRepository, mock(UserRepository.class),
-                folderRepository, tempDir.toString());
+                folderRepository, mock(org.eardream.devvault.file.repository.FileRevisionRepository.class), tempDir.toString());
 
         StoredFile result = service.update(email, 7L, " new.txt ", true, 10L);
 
@@ -247,7 +247,7 @@ class FileStorageServiceTest {
         when(fileRepository.findByIdAndOwnerEmail(7L, email)).thenReturn(Optional.of(file));
         when(folderRepository.findByIdAndOwnerEmail(10L, email)).thenReturn(Optional.empty());
         FileStorageService service = new FileStorageService(fileRepository, mock(UserRepository.class),
-                folderRepository, tempDir.toString());
+                folderRepository, mock(org.eardream.devvault.file.repository.FileRevisionRepository.class), tempDir.toString());
 
         ResponseStatusException exception = assertThrows(ResponseStatusException.class,
                 () -> service.update(email, 7L, null, true, 10L));
@@ -453,6 +453,6 @@ class FileStorageServiceTest {
     }
 
     private FileStorageService service(StoredFileRepository fileRepository, UserRepository userRepository) {
-        return new FileStorageService(fileRepository, userRepository, mock(FolderRepository.class), tempDir.toString());
+        return new FileStorageService(fileRepository, userRepository, mock(FolderRepository.class), mock(org.eardream.devvault.file.repository.FileRevisionRepository.class), tempDir.toString());
     }
 }

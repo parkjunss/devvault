@@ -1,6 +1,8 @@
 package org.eardream.devvault.file.service;
 
 import org.eardream.devvault.file.entity.StoredFile;
+import org.eardream.devvault.file.entity.FileRevision;
+import org.eardream.devvault.file.repository.FileRevisionRepository;
 import org.eardream.devvault.file.repository.StoredFileRepository;
 import org.eardream.devvault.folder.entity.Folder;
 import org.eardream.devvault.folder.repository.FolderRepository;
@@ -48,12 +50,15 @@ public class FileStorageService {
     private final UserRepository userRepository;
     private final FolderRepository folderRepository;
     private final Path storageRoot;
+    private final FileRevisionRepository revisions;
 
     public FileStorageService(StoredFileRepository storedFileRepository,
                               UserRepository userRepository,
                               FolderRepository folderRepository,
+                              FileRevisionRepository revisions,
                               @Value("${app.storage.location}") String storageLocation) {
         this.storedFileRepository = storedFileRepository;
+        this.revisions = revisions;
         this.userRepository = userRepository;
         this.folderRepository = folderRepository;
         this.storageRoot = Path.of(storageLocation).toAbsolutePath().normalize();
@@ -87,7 +92,8 @@ public class FileStorageService {
                 Files.copy(input, tempPath, StandardCopyOption.REPLACE_EXISTING);
             }
             String checksum = HexFormat.of().formatHex(digest.digest());
-            if (storedFileRepository.findFirstByOwnerEmailAndChecksum(ownerEmail, checksum).isPresent()) {
+            if (storedFileRepository.findFirstByOwnerEmailAndChecksum(ownerEmail, checksum).isPresent()
+                    || revisions.existsByFileOwnerEmailAndChecksum(ownerEmail, checksum)) {
                 throw duplicateFile();
             }
             moveIntoPlace(tempPath, finalPath);
@@ -123,6 +129,111 @@ public class FileStorageService {
                     // Best-effort cleanup of an incomplete upload.
                 }
             }
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public List<RevisionInfo> revisions(String email, Long fileId) {
+        StoredFile file = get(email, fileId);
+        var result = new java.util.ArrayList<RevisionInfo>();
+        result.add(RevisionInfo.from(FileRevision.archive(file), true));
+        revisions.findAllByFileIdOrderByVersionDesc(fileId).forEach(r -> result.add(RevisionInfo.from(r, false)));
+        return result;
+    }
+
+    @Transactional
+    public StoredFile saveVersion(String email, Long fileId, long expectedVersion, MultipartFile upload) {
+        validateOriginalName(upload);
+        User owner = lockOwner(email);
+        StoredFile file = get(email, fileId);
+        checkVersion(file, expectedVersion);
+        if (file.getSize() > 50L * 1024 * 1024 || upload.getSize() > 50L * 1024 * 1024) throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "편집은 50MiB 이하만 지원합니다.");
+        String type = upload.getContentType();
+        boolean pdf = "application/pdf".equals(file.getContentType());
+        if (!(pdf && "application/pdf".equals(type)) && !(PREVIEW_IMAGE_TYPES.contains(file.getContentType() == null ? "" : file.getContentType()) && "image/png".equals(type))) {
+            throw new ResponseStatusException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "PDF 또는 PNG 편집 결과만 저장할 수 있습니다.");
+        }
+        try (InputStream input = upload.getInputStream()) {
+            return replaceVersion(owner, file, input, upload.getSize(), type, pdf ? "pdf" : "png", true);
+        } catch (IOException e) { throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "편집본을 저장할 수 없습니다.", e); }
+    }
+
+    @Transactional
+    public StoredFile restoreVersion(String email, Long fileId, long version, long expectedVersion) {
+        User owner = lockOwner(email);
+        StoredFile file = get(email, fileId);
+        checkVersion(file, expectedVersion);
+        FileRevision revision = revisions.findByFileIdAndVersion(fileId, version).orElseThrow(FileStorageService::notFound);
+        try (InputStream input = Files.newInputStream(resolveStoredPath(revision.getStoredName()))) {
+            return replaceVersion(owner, file, input, revision.getSize(), revision.getContentType(), extensionOf(revision.getOriginalName()), false);
+        } catch (IOException e) { throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "이전 버전을 복원할 수 없습니다.", e); }
+    }
+
+    private User lockOwner(String email) {
+        return userRepository.findByEmailForUpdate(email).orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+    }
+
+    private static void checkVersion(StoredFile file, long expected) {
+        if (expected < 1) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "현재 버전이 필요합니다.");
+        if (file.getVersion() != expected) throw new ResponseStatusException(HttpStatus.CONFLICT, "다른 탭에서 파일을 변경했습니다. 최신 버전을 확인해 주세요.");
+    }
+
+    private StoredFile replaceVersion(User owner, StoredFile file, InputStream input, long expectedSize,
+                                      String type, String extension, boolean validateSignature) {
+        long available = owner.getStorageQuotaBytes() - storedFileRepository.sumStoredBytes(owner.getEmail());
+        if (expectedSize > available) throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "이전 버전을 포함한 저장소 용량이 부족합니다.");
+        String storedName = UUID.randomUUID().toString();
+        Path target = resolveStoredPath(storedName);
+        Path temp = null;
+        boolean moved = false;
+        try {
+            Files.createDirectories(storageRoot);
+            temp = Files.createTempFile(storageRoot, ".revision-", ".tmp");
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            try (var output = Files.newOutputStream(temp)) {
+                byte[] buffer = new byte[8192];
+                long size = 0;
+                for (int read; (read = input.read(buffer)) != -1;) {
+                    size += read;
+                    if (size > available || size > 50L * 1024 * 1024) throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "편집본 용량이 제한을 초과합니다.");
+                    digest.update(buffer, 0, read);
+                    output.write(buffer, 0, read);
+                }
+            }
+            if (validateSignature) {
+                byte[] header;
+                try (var stream = Files.newInputStream(temp)) { header = stream.readNBytes(8); }
+                byte[] signature = "application/pdf".equals(type) ? "%PDF-".getBytes(java.nio.charset.StandardCharsets.US_ASCII)
+                        : new byte[]{(byte)137, 80, 78, 71, 13, 10, 26, 10};
+                if (header.length < signature.length || !java.util.Arrays.equals(signature, java.util.Arrays.copyOf(header, signature.length)))
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "편집본의 파일 형식이 올바르지 않습니다.");
+            }
+            String checksum = HexFormat.of().formatHex(digest.digest());
+            if (checksum.equals(file.getChecksum())) return file;
+            if (storedFileRepository.findFirstByOwnerEmailAndChecksum(owner.getEmail(), checksum).filter(other -> !other.getId().equals(file.getId())).isPresent()
+                    || revisions.existsByFileOwnerEmailAndChecksumAndFileIdNot(owner.getEmail(), checksum, file.getId())) throw duplicateFile();
+            revisions.save(FileRevision.archive(file));
+            moveIntoPlace(temp, target);
+            temp = null;
+            moved = true;
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override public void afterCompletion(int status) { if (status != STATUS_COMMITTED) deletePhysicalFile(target); }
+            });
+            file.replaceContent(storedName, type, Files.size(target), checksum, extension);
+            storedFileRepository.flush();
+            return file;
+        } catch (IOException e) {
+            if (moved) deletePhysicalFile(target);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "파일 버전을 저장할 수 없습니다.", e);
+        } catch (NoSuchAlgorithmException e) { throw new IllegalStateException(e); }
+        catch (RuntimeException e) { if (moved) deletePhysicalFile(target); throw e; }
+        finally { if (temp != null) deletePhysicalFile(temp); }
+    }
+
+    public record RevisionInfo(long version, String originalName, String contentType, long size, String checksum,
+                               java.time.Instant createdAt, boolean current) {
+        static RevisionInfo from(FileRevision r, boolean current) {
+            return new RevisionInfo(r.getVersion(), r.getOriginalName(), r.getContentType(), r.getSize(), r.getChecksum(), r.getCreatedAt(), current);
         }
     }
 
@@ -238,7 +349,8 @@ public class FileStorageService {
     @Transactional
     public void deletePermanently(String ownerEmail, Long fileId) {
         StoredFile file = getTrashed(ownerEmail, fileId);
-        Path path = resolveStoredPath(file.getStoredName());
+        List<Path> paths = new java.util.ArrayList<>(revisions.findAllByFileIdOrderByVersionDesc(fileId).stream().map(r -> resolveStoredPath(r.getStoredName())).toList());
+        paths.add(resolveStoredPath(file.getStoredName()));
         storedFileRepository.delete(file);
         storedFileRepository.flush();
         // ponytail: after-commit deletion can leave an orphan on I/O failure; add a cleanup job if observed.
@@ -246,11 +358,11 @@ public class FileStorageService {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    deletePhysicalFile(path);
+                    paths.forEach(FileStorageService::deletePhysicalFile);
                 }
             });
         } else {
-            deletePhysicalFile(path);
+            paths.forEach(FileStorageService::deletePhysicalFile);
         }
     }
 

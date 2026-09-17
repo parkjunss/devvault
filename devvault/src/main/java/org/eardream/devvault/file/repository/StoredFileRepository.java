@@ -63,13 +63,17 @@ public interface StoredFileRepository extends JpaRepository<StoredFile, Long> {
             """)
     UsageSummary summarizeActiveUsage(@Param("ownerEmail") String ownerEmail);
 
-    @Query("select coalesce(sum(file.size), 0) from StoredFile file where file.owner.email = :ownerEmail")
+    @Query(value = """
+            select (select coalesce(sum(f.size), 0) from stored_files f join users u on u.id = f.owner_id where u.email = :ownerEmail)
+                 + (select coalesce(sum(r.size), 0) from file_revisions r join stored_files f on f.id = r.file_id
+                    join users u on u.id = f.owner_id where u.email = :ownerEmail)
+            """, nativeQuery = true)
     long sumStoredBytes(@Param("ownerEmail") String ownerEmail);
 
-    @Query("""
-            select count(file) as fileCount, coalesce(sum(file.size), 0) as usedBytes
-            from StoredFile file
-            """)
+    @Query(value = """
+            select count(*) as fileCount, coalesce(sum(size), 0)
+                + (select coalesce(sum(size), 0) from file_revisions) as usedBytes from stored_files
+            """, nativeQuery = true)
     UsageSummary summarizeAllUsage();
 
     @Query("""

@@ -7,6 +7,7 @@ export type VaultFile = {
   contentType: string | null;
   size: number;
   checksum: string;
+  version?: number;
   favorite: boolean;
   createdAt: string;
   tags?: Tag[];
@@ -61,3 +62,5 @@ export type Lesson = {
   sourceFileId: number | null;
   createdAt: string;
 };
+
+export type FileVersion = { version: number; originalName: string; contentType: string; size: number; checksum: string; createdAt: string; current: boolean };

@@ -71,6 +71,31 @@ public class StoredFile {
 
     private Instant deletedAt;
 
+    @Column(nullable = false, columnDefinition = "bigint default 1")
+    @Builder.Default
+    private long version = 1;
+
+    @jakarta.persistence.Version
+    @Column(nullable = false, columnDefinition = "bigint default 0")
+    private long lockVersion;
+
+    private Instant updatedAt;
+
+    @jakarta.persistence.OneToMany(mappedBy = "file", cascade = jakarta.persistence.CascadeType.REMOVE)
+    @Builder.Default
+    private java.util.List<FileRevision> revisions = new java.util.ArrayList<>();
+
+    public void replaceContent(String storedName, String contentType, long size, String checksum, String extension) {
+        this.storedName = storedName;
+        this.contentType = contentType;
+        this.size = size;
+        this.checksum = checksum;
+        int dot = originalName.lastIndexOf('.');
+        this.originalName = (dot > 0 ? originalName.substring(0, dot) : originalName) + "." + extension;
+        this.version++;
+        this.updatedAt = Instant.now();
+    }
+
     @ManyToMany
     @JoinTable(name = "file_tags",
             joinColumns = @JoinColumn(name = "file_id"),
