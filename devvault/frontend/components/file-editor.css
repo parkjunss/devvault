@@ -1,27 +1,45 @@
-.fileEditor { max-width: 1440px; margin: auto; padding: 24px; color: #18253c; }
-.fileEditor > header { display: flex; justify-content: space-between; gap: 20px; align-items: center; }
-.fileEditor h1 { font-size: 22px; overflow-wrap: anywhere; margin: 12px 0; }
-.fileEditor p { line-height: 1.6; }
-.fileEditor button, .fileEditor select { cursor: pointer; border: 1px solid #bac8da; border-radius: 8px; padding: 9px 12px; background: white; color: #18253c; font: inherit; }
+.fileEditor { position: fixed; inset: 0; width: 100%; height: 100dvh; color: #18253c; background: #dfe4eb; }
+.fileEditor button, .fileEditor select { min-height: 44px; cursor: pointer; border: 1px solid #bac8da; border-radius: 8px; padding: 9px 12px; background: white; color: #18253c; font: inherit; }
 .fileEditor button:disabled { opacity: .5; cursor: default; }
 .fileEditor button[aria-pressed=true] { background: #e6eeff; border-color: #2459cc; color: #1749b6; }
-.fileEditor :focus-visible { outline: 3px solid #2459cc; outline-offset: 3px; }
-.fileEditor > header .primaryButton { background: #2459cc; color: white; flex-shrink: 0; }
-.editorToolbar { margin-top: 20px; border: 1px solid #d1dbe8; border-radius: 12px; padding: 16px; }
-.editorTools, .editorNavigation { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 8px 0; }
-.editorToolbar label, .editorNavigation label { display: flex; gap: 8px; align-items: center; }
-.editorToolbar input[type=number] { width: 90px; padding: 8px; }
-.editorToolbar input[type=range] { width: 100px; }
-.editorToolbar textarea { flex: 1; margin-top: 12px; min-height: 65px; padding: 10px; }
-.editorNavigation { justify-content: center; padding-top: 12px; }
-.editorHint { color: #52637b; font-size: 14px; }
-.editorViewport { overflow: auto; background: #e5eaf1; border-radius: 10px; padding: 20px; max-height: 75vh; }
-.editorPaper { position: relative; margin: auto; background: white; box-shadow: 0 2px 12px #24344822; flex-shrink: 0; }
-.editorPaper canvas { display: block; width: 100%; height: 100%; }
-.editorPaper .editorInk { position: absolute; inset: 0; touch-action: none; cursor: crosshair; }
-.editorError { background: #fff0f0; color: #9b2020; padding: 12px; border-radius: 8px; }
-.editorSuccess { background: #e7f7ef; padding: 12px; border-radius: 8px; }
-.editorMarkList h2 { font-size: 17px; }
-.editorMarkList > div { display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #d1dbe8; padding: 8px; }
-.editorMarkList span { flex: 1; overflow-wrap: anywhere; white-space: pre-wrap; }
-@media (max-width: 640px) { .fileEditor { padding: 12px; } .fileEditor > header { align-items: flex-start; flex-direction: column; } .editorViewport { padding: 8px; } .editorToolbar { padding: 8px; } }
+.fileEditor :focus-visible { outline: 3px solid #2459cc; outline-offset: -3px; }
+.fileEditor .primaryButton { background: #2459cc; color: white; width: 100%; }
+.editorViewport { position: absolute; inset: 0; overflow: auto; overscroll-behavior: contain; touch-action: pan-x pan-y pinch-zoom; }
+.editorPages { min-height: 100%; margin: 0 auto; }
+.editorPaper { position: relative; width: 100%; margin: 0 0 8px; background: white; box-shadow: 0 2px 6px #24344825; }
+.editorPaper:last-child { margin-bottom: 0; }
+.editorPaper canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.editorInk { touch-action: none; cursor: crosshair; }
+.editorInk[data-tool=read] { pointer-events: none; touch-action: auto; cursor: default; }
+.editorInk[data-tool=erase] { cursor: cell; }
+.editorPageLoading { position: absolute; inset: 0; display: grid; place-items: center; color: #52637b; }
+.editorLoading { margin: 0; padding: 80px 24px; text-align: center; }
+.fileEditor .editorMenuButton { position: absolute; z-index: 5; left: max(12px, env(safe-area-inset-left)); top: max(12px, env(safe-area-inset-top)); width: 46px; height: 46px; padding: 0; display: grid; place-items: center; box-shadow: 0 2px 12px #18253c20; background: #fffffff0; }
+.editorUnsavedDot { position: absolute; width: 8px; height: 8px; border-radius: 50%; top: 5px; right: 5px; background: #d67900; }
+.fileEditor .editorReadingButton { position: absolute; z-index: 5; right: max(12px, env(safe-area-inset-right)); top: max(12px, env(safe-area-inset-top)); box-shadow: 0 2px 12px #18253c20; font-size: 13px; }
+.editorDrawer { position: fixed; inset: 0 auto 0 0; width: min(370px, 100%); max-width: 100%; height: 100%; max-height: 100dvh; margin: 0; padding: max(18px, env(safe-area-inset-top)) 18px max(18px, env(safe-area-inset-bottom)); border: 0; box-shadow: 4px 0 24px #18253c25; overflow-y: auto; overscroll-behavior: contain; color: #18253c; }
+.editorDrawer::backdrop { background: #18253c45; }
+.editorDrawer > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.editorDrawer h1 { font-size: 20px; margin: 0; }
+.editorDrawer header button { display: grid; place-items: center; }
+.editorFilename { overflow-wrap: anywhere; font-size: 14px; line-height: 1.5; }
+.editorToolbar { margin: 20px 0; border: 1px solid #d1dbe8; border-radius: 10px; padding: 12px; min-width: 0; }
+.editorTools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.editorToolbar label, .editorNavigation label { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
+.editorToolbar input[type=number], .editorNavigation input { width: 90px; padding: 8px; min-height: 44px; }
+.editorToolbar input[type=range] { flex: 1; min-width: 0; }
+.editorToolbar textarea { width: 100%; min-height: 90px; padding: 10px; font: inherit; resize: vertical; }
+.editorImageTools { display: grid; gap: 8px; margin-top: 16px; }
+.editorNavigation form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.editorNavigation select { max-width: 100%; }
+.editorHint { color: #52637b; font-size: 13px; line-height: 1.65; }
+.editorError, .editorSuccess { padding: 12px; border-radius: 8px; overflow-wrap: anywhere; font-size: 14px; line-height: 1.6; }
+.editorError { background: #fff0f0; color: #9b2020; }
+.editorSuccess { background: #e7f7ef; }
+.editorError button, .editorSuccess button { margin-left: 8px; vertical-align: middle; }
+.editorNotifications { position: absolute; z-index: 6; bottom: 12px; left: 12px; right: 12px; max-width: 600px; margin: auto; }
+.editorMarkList { margin: 20px 0; font-size: 14px; }
+.editorMarkList summary { cursor: pointer; min-height: 44px; padding: 12px 0; }
+.editorMarkList > div { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border-bottom: 1px solid #d1dbe8; padding: 8px 0; }
+.editorMarkList span { flex: 1; min-width: 60px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.editorHome { display: inline-block; padding: 12px 0; color: #2459cc; }

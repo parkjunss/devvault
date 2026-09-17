@@ -3,7 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const Module = require("node:module");
 const ts = require("typescript");
-const { PDFDocument, degrees } = require("pdf-lib");
+const { PDFDocument, degrees, rgb } = require("pdf-lib");
 
 const filename = path.resolve(__dirname, "../lib/document-editing.ts");
 const compiled = ts.transpileModule(fs.readFileSync(filename, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
@@ -11,11 +11,40 @@ const loaded = new Module(filename, module);
 loaded.filename = filename;
 loaded.paths = module.paths;
 loaded._compile(compiled, filename);
-const { readMarks, createPdfCopy, SOURCE_ATTACHMENT, MARKS_ATTACHMENT } = loaded.exports;
+const { readMarks, drawMarks, createPdfCopy, SOURCE_ATTACHMENT, MARKS_ATTACHMENT } = loaded.exports;
 
 (async () => {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const { createCanvas } = require("@napi-rs/canvas");
+  const ink = createCanvas(400, 600);
+  const strokes = [
+    { page: 1, tool: "pen", width: .02, color: "#ff0000", points: [{ x: .1, y: .2 }, { x: .9, y: .2 }] },
+    { page: 1, tool: "erase", width: .05, color: "#000000", points: [{ x: .5, y: .1 }, { x: .5, y: .3 }] }
+  ];
+  assert.deepEqual(readMarks(JSON.stringify(strokes), 1), strokes);
+  drawMarks(ink.getContext("2d"), strokes, 400, 600);
+  assert.equal(ink.getContext("2d").getImageData(200, 120, 1, 1).data[3], 0);
+  assert.equal(ink.getContext("2d").getImageData(100, 120, 1, 1).data[3], 255);
+  const base = createCanvas(400, 600), baseContext = base.getContext("2d");
+  baseContext.fillStyle = "#00ff00";
+  baseContext.fillRect(0, 0, 400, 600);
+  baseContext.drawImage(ink, 0, 0);
+  assert.deepEqual([...baseContext.getImageData(200, 120, 1, 1).data], [0, 255, 0, 255], "erased ink reveals the unchanged original");
+  const coloredPdf = await PDFDocument.create();
+  coloredPdf.addPage([400, 600]).drawRectangle({ x: 0, y: 0, width: 400, height: 600, color: rgb(0, 1, 0) });
+  const erasedPdf = await createPdfCopy(await coloredPdf.save(), strokes, async (marks, width, height) => {
+    const overlay = createCanvas(width, height);
+    drawMarks(overlay.getContext("2d"), marks, width, height);
+    return overlay.toBuffer("image/png");
+  });
+  const erasedTask = pdfjs.getDocument({ data: erasedPdf });
+  try {
+    const savedDocument = await erasedTask.promise;
+    const savedPage = await savedDocument.getPage(1);
+    const rendered = createCanvas(400, 600);
+    await savedPage.render({ canvas: rendered, viewport: savedPage.getViewport({ scale: 1 }) }).promise;
+    assert.deepEqual([...rendered.getContext("2d").getImageData(200, 120, 1, 1).data], [0, 255, 0, 255], "exported PDF must reveal the original under erased ink");
+  } finally { await erasedTask.destroy(); }
   const input = await PDFDocument.create();
   for (const rotation of [0, 90, 180, 270]) {
     const page = input.addPage([500, 700]);

@@ -1,7 +1,7 @@
 import { PDFDocument, degrees } from "pdf-lib";
 
 export type Point = { x: number; y: number };
-export type Mark = { page: number; tool: "pen" | "highlight" | "text"; color: string; width: number; points: Point[]; text?: string };
+export type Mark = { page: number; tool: "pen" | "highlight" | "text" | "erase"; color: string; width: number; points: Point[]; text?: string };
 export const SOURCE_ATTACHMENT = "devvault-original-v1.pdf";
 export const MARKS_ATTACHMENT = "devvault-marks-v1.json";
 export const MAX_EDIT_BYTES = 50 * 1024 * 1024;
@@ -12,7 +12,7 @@ export function readMarks(raw: string, pageCount: number): Mark[] {
   if (!Array.isArray(marks) || marks.length > 10000) throw new Error("필기 데이터가 올바르지 않습니다.");
   for (const mark of marks) {
     if (!mark || !Number.isInteger(mark.page) || mark.page < 1 || mark.page > pageCount
-      || !["pen", "highlight", "text"].includes(mark.tool) || !/^#[0-9a-f]{6}$/i.test(mark.color)
+      || !["pen", "highlight", "text", "erase"].includes(mark.tool) || !/^#[0-9a-f]{6}$/i.test(mark.color)
       || !Number.isFinite(mark.width) || mark.width < 0.0001 || mark.width > 0.2
       || !Array.isArray(mark.points) || !mark.points.length
       || (mark.tool === "text" && (typeof mark.text !== "string" || mark.text.length > 1000))
@@ -32,6 +32,7 @@ export function drawMarks(context: CanvasRenderingContext2D, marks: Mark[], widt
     context.lineWidth = Math.max(1, mark.width * width);
     context.lineCap = context.lineJoin = "round";
     context.globalAlpha = mark.tool === "highlight" ? 0.3 : 1;
+    if (mark.tool === "erase") context.globalCompositeOperation = "destination-out";
     const first = mark.points[0];
     if (mark.tool === "text") {
       context.font = `${mark.width * width}px "Noto Sans KR Variable", sans-serif`;
