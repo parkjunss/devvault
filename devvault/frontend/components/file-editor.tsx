@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowUUpLeft, ArrowUUpRight, List, X } from "@phosphor-icons/react";
+import { ArrowUUpLeft, ArrowUUpRight, List, X, Pen, Highlighter, Eraser, Hand } from "@phosphor-icons/react";
 import { EditorPage, type EditorTool, type Crop } from "./editor-page";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { apiFetch, apiJson } from "@/lib/api";
-import type { VaultFile, FileVersion } from "@/lib/types";
+import type { VaultFile } from "@/lib/types";
 import { changeMarkHistory, createPdfCopy, drawMarks, readMarks, MAX_EDIT_BYTES, SOURCE_ATTACHMENT, MARKS_ATTACHMENT, type Mark } from "@/lib/document-editing";
 import { editorDraft, type EditorDraft } from "@/lib/editor-draft";
 import "./file-editor.css";
@@ -38,8 +38,6 @@ export function FileEditor({ fileId }: { fileId: number }) {
   const source = useRef<Uint8Array | null>(null);
 
   const initialImage = useRef<HTMLImageElement | null>(null);
-  const [versions, setVersions] = useState<FileVersion[]>([]);
-  const leaving = useRef(false);
   const [file, setFile] = useState<VaultFile | null>(null);
   const [kind, setKind] = useState<"pdf" | "image">("image");
   const [ready, setReady] = useState(false);
@@ -155,7 +153,7 @@ export function FileEditor({ fileId }: { fileId: number }) {
   }, [menuOpen]);
 
   useEffect(() => {
-    const warn = (event: BeforeUnloadEvent) => { if (dirty && !leaving.current) { event.preventDefault(); event.returnValue = ""; } };
+    const warn = (event: BeforeUnloadEvent) => { if (dirty) { event.preventDefault(); event.returnValue = ""; } };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
@@ -164,13 +162,18 @@ export function FileEditor({ fileId }: { fileId: number }) {
     if (!ready || !draftLoaded || pendingDraft || !draftKey) return;
     let current = true;
     const value: EditorDraft = { marks, image: bitmap && bitmap !== initialImage.current ? bitmap.src : null, updatedAt: Date.now() };
-    draftQueue.current = draftQueue.current.catch(() => undefined).then(async () => {
-      if (current) setDraftStatus(dirty ? "기기에 임시 저장 중..." : "");
-      await editorDraft(draftKey, dirty ? "write" : "delete", value);
-      if (file?.version === 1 || file?.version === undefined) await editorDraft(`${file!.id}:${file!.checksum}`, "delete");
-      if (current && dirty) setDraftStatus("이 기기에 임시 저장됨 · 서버 저장은 별도입니다.");
-    }).catch(() => { if (current) setDraftStatus("임시 저장 실패: 저장 공간을 확인하고 편집본을 저장해 주세요."); });
-    return () => { current = false; };
+    let timer: number;
+    const persist = () => {
+      if (drawing.current) { timer = window.setTimeout(persist, 500); return; }
+      draftQueue.current = draftQueue.current.catch(() => undefined).then(async () => {
+        if (current) setDraftStatus(dirty ? "기기에 임시 저장 중..." : "");
+        await editorDraft(draftKey, dirty ? "write" : "delete", value);
+        if (file?.version === 1 || file?.version === undefined) await editorDraft(`${file!.id}:${file!.checksum}`, "delete");
+        if (current && dirty) setDraftStatus("이 기기에 임시 저장됨 · 서버 저장은 별도입니다.");
+      }).catch(() => { if (current) setDraftStatus("임시 저장 실패: 저장 공간을 확인하고 편집본을 저장해 주세요."); });
+    };
+    timer = window.setTimeout(persist, 500);
+    return () => { current = false; window.clearTimeout(timer); };
   }, [ready, draftLoaded, pendingDraft, draftKey, dirty, marks, bitmap, file]);
 
   async function restoreDraft() {
@@ -191,9 +194,6 @@ export function FileEditor({ fileId }: { fileId: number }) {
     if (busy || drawing.current) return;
     const next = changeMarkHistory(history, { type: direction });
     if (next === history) return;
-    const previousMarks = new Set(history.present.marks), nextMarks = new Set(next.present.marks);
-    const affectedPage = history.present.marks.find(mark => !nextMarks.has(mark))?.page
-      ?? next.present.marks.find(mark => !previousMarks.has(mark))?.page;
     dispatchHistory({ type: direction });
     if (next.present.bitmap !== bitmap) {
       const image = next.present.bitmap;
@@ -201,10 +201,6 @@ export function FileEditor({ fileId }: { fileId: number }) {
       setRevision(value => value + 1);
     }
     setSaved(null);
-    if (affectedPage) {
-      setPage(affectedPage);
-      shell.current?.querySelector(`[data-page="${affectedPage}"]`)?.scrollIntoView({ block: "start" });
-    }
   }, [busy, history, bitmap]);
 
   useEffect(() => {
@@ -221,32 +217,10 @@ export function FileEditor({ fileId }: { fileId: number }) {
     return () => window.removeEventListener("keydown", shortcut);
   }, [moveHistory]);
 
-  useEffect(() => {
-    if (!menuOpen || !file) return;
-    let cancelled = false;
-    apiJson<FileVersion[]>(`/api/files/${file.id}/versions`).then(value => {
-      if (!cancelled) setVersions(value);
-    }).catch(error => { if (!cancelled) setError(`버전 조회 실패: ${message(error)}`); });
-    return () => { cancelled = true; };
-  }, [menuOpen, file]);
-
   async function clearDraft() {
     await draftQueue.current;
     try { await editorDraft(draftKey, "delete"); }
     catch { setDraftStatus("서버 저장은 완료됐지만 기기 임시 저장을 지우지 못했습니다."); }
-  }
-
-  async function rollback(version: number) {
-    if (busy || !file || drawing.current) return;
-    if (!window.confirm(`v${version} 내용으로 복원할까요? 현재 서버 버전은 이력에 보존됩니다.${dirty ? " 저장하지 않은 현재 편집은 버려집니다." : ""}`)) return;
-    setSaving(true);
-    setError("");
-    try {
-      await apiJson<VaultFile>(`/api/files/${file.id}/versions/${version}/restore`, { method: "POST", body: JSON.stringify({ expectedVersion: file.version ?? 1 }) });
-      await clearDraft();
-      leaving.current = true;
-      window.location.reload();
-    } catch (error) { setError(`버전 복원 실패: ${message(error)}`); setSaving(false); }
   }
 
   function changeScale(value: string) {
@@ -255,8 +229,10 @@ export function FileEditor({ fileId }: { fileId: number }) {
   }
 
   function updateMarks(next: Mark[]) {
-    try { readMarks(JSON.stringify(next), pages); }
-    catch (error) { setError(message(error)); return; }
+    // Pointer input is normalized at its source; validate untrusted imported data separately.
+    if (next.length > 10000 || next.reduce((sum, mark) => sum + mark.points.length, 0) > 200000 || next.some(mark => (mark.text?.length ?? 0) > 1000)) {
+      setError("필기 데이터가 너무 큽니다."); return;
+    }
     dispatchHistory({ type: "edit", marks: { marks: next, bitmap } });
     setSaved(null);
   }
@@ -325,7 +301,7 @@ export function FileEditor({ fileId }: { fileId: number }) {
       const body = new FormData();
       body.append("file", blob, name);
       body.append("expectedVersion", String(file.version ?? 1));
-      const copy = await apiJson<VaultFile>(`/api/files/${file.id}/versions`, { method: "POST", body });
+      const copy = await apiJson<VaultFile>(`/api/files/${file.id}/content`, { method: "POST", body });
       await clearDraft();
       setFile(copy);
       setSaved(copy);
@@ -339,11 +315,14 @@ export function FileEditor({ fileId }: { fileId: number }) {
     <button aria-label="되돌리기" title="되돌리기 (Ctrl/Cmd+Z)" disabled={busy || !history.past.length} onClick={() => moveHistory("undo")}><ArrowUUpLeft size={22} /></button>
     <button aria-label="다시 실행" title="다시 실행 (Ctrl/Cmd+Shift+Z 또는 Ctrl+Y)" disabled={busy || !history.future.length} onClick={() => moveHistory("redo")}><ArrowUUpRight size={22} /></button>
   </>;
-  const feedback = <>{error && <p role="alert" className="editorError">{error}<button aria-label="오류 안내 닫기" onClick={() => setError("")}><X /></button></p>}{saved && <p role="status" className="editorSuccess">저장 완료: {saved.originalName} · v{saved.version ?? 1}<button aria-label="저장 안내 닫기" onClick={() => setSaved(null)}><X /></button></p>}</>;
+  const feedback = <>{error && <p role="alert" className="editorError">{error}<button aria-label="오류 안내 닫기" onClick={() => setError("")}><X /></button></p>}{saved && <p role="status" className="editorSuccess">저장 완료: {saved.originalName}<button aria-label="저장 안내 닫기" onClick={() => setSaved(null)}><X /></button></p>}</>;
 
   return <main ref={shell} className="fileEditor" aria-label={file?.originalName ?? "파일 읽기 및 편집"}>
     <button className="editorMenuButton" aria-label="편집 메뉴 열기" aria-haspopup="dialog" aria-controls="editor-menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}><List size={24} />{dirty && <span className="editorUnsavedDot" aria-label="저장하지 않은 변경 사항" />}</button>
-    {tool !== "read" && <div className="editorQuickTools" role="group" aria-label="빠른 편집 도구">{historyButtons}<button className="editorReadingButton" onClick={() => setTool("read")}>{labels[tool]} · 읽기로 전환</button></div>}
+    <div className="editorQuickTools" role="group" aria-label="빠른 편집 도구">
+      {([ ["pen", Pen], ["highlight", Highlighter], ["erase", Eraser], ["read", Hand] ] as const).map(([value, Icon]) => <button key={value} aria-label={labels[value]} title={labels[value]} aria-pressed={tool === value} disabled={busy} onClick={() => chooseTool(value)}><Icon size={22} /></button>)}
+      {historyButtons}
+    </div>
     <div className="editorViewport" role="region" aria-label="문서 연속 보기" tabIndex={0}>
       {!ready && <p className="editorLoading" role="status">{error ? "문서를 열지 못했습니다. 메뉴에서 오류를 확인해 주세요." : "파일을 여는 중..."}</p>}
       {ready && <div className="editorPages" data-scale={typeof zoom === "number" ? "custom" : zoom} style={{ width: typeof zoom === "number" ? `${zoom}%` : "100%" }}>
@@ -357,8 +336,8 @@ export function FileEditor({ fileId }: { fileId: number }) {
       <p role="status" className="editorHint">{draftStatus}</p>
       <p className="editorFilename">{file?.originalName}</p>
       {feedback}
-      <button className="primaryButton" onClick={save} disabled={busy || !dirty}>{saving ? "저장 중..." : "버전 저장"}</button>
-      <p className="editorHint">파일은 하나로 유지하고 저장할 때마다 버전을 추가합니다. 원본은 v1에서 복원할 수 있습니다.</p>
+      <button className="primaryButton" onClick={save} disabled={busy || !dirty}>{saving ? "저장 중..." : "저장"}</button>
+      <p className="editorHint">같은 파일에 현재 편집을 저장합니다. PDF 원문은 보존되고 필기만 수정됩니다.</p>
       <fieldset className="editorToolbar" disabled={busy}>
         <legend>읽기·편집 도구</legend>
         <label><input type="checkbox" checked={penOnly} onChange={event => setPenOnly(event.target.checked)} />펜 전용 모드 (손가락은 스크롤)</label>
@@ -377,14 +356,6 @@ export function FileEditor({ fileId }: { fileId: number }) {
           <p className="editorHint">PNG로 저장합니다. 저장·변환 후 필기는 이미지에 합쳐지며, GIF는 정지 이미지가 됩니다.</p>
         </div>}
       </fieldset>
-      <section className="editorVersions" aria-label="버전 이력">
-        <h2>버전 이력</h2>
-        <p className="editorHint">현재 v{file?.version ?? 1} · 복원도 새 버전으로 남습니다.</p>
-        {versions.map(version => <div key={version.version}>
-          <span>v{version.version}{version.version === 1 ? " · 원본" : ""}{version.current ? " · 현재" : ""}<small>{new Date(version.createdAt).toLocaleString()} · {(version.size / 1024).toFixed(1)} KB</small></span>
-          {!version.current && <button disabled={busy} onClick={() => void rollback(version.version)} aria-label={`v${version.version} 복원`}>복원</button>}
-        </div>)}
-      </section>
       <section className="editorNavigation" aria-label="보기 설정">
         <label>화면 맞춤·배율<select aria-label="확대" value={zoom} onChange={event => changeScale(event.target.value)}>
           <option value="auto">자동 맞춤</option><option value="page">페이지 맞춤 (위아래 전체)</option><option value="width">폭 맞춤</option>

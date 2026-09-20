@@ -116,6 +116,30 @@ class FileVersionIntegrationTest {
                 .andExpect(content().string("%PDF-before"));
     }
 
+    @Test void contentSaveReplacesLatestWithoutGrowingHistoryAndRollsBackSafely() throws Exception {
+        String owner = owner("content"); long id = upload(owner, "%PDF-original");
+        storage.saveContent(owner, id, 1, data("%PDF-edit-one"));
+        String previous = files.findById(id).orElseThrow().getStoredName();
+        long count = physicalCount();
+        User user = users.findByEmail(owner).orElseThrow(); user.updateStorageQuota(26); users.saveAndFlush(user);
+        mvc.perform(multipart("/api/files/" + id + "/content").file(data("%PDF-edit-two"))
+                .param("expectedVersion", "2").with(jwt().jwt(j -> j.subject(owner))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(id));
+        assertFalse(Files.exists(uploads.resolve(previous)));
+        assertEquals(count, physicalCount());
+        assertEquals(1, revisions.findAllByFileIdOrderByVersionDesc(id).size());
+        assertEquals("%PDF-original".length() + "%PDF-edit-two".length(), files.sumStoredBytes(owner));
+        new org.springframework.transaction.support.TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            storage.saveContent(owner, id, 3, data("%PDF-failed"));
+            status.setRollbackOnly();
+        });
+        assertEquals(count, physicalCount());
+        mvc.perform(get("/api/files/" + id + "/download").with(jwt().jwt(j -> j.subject(owner))))
+                .andExpect(content().string("%PDF-edit-two"));
+        mvc.perform(multipart("/api/files/" + id + "/content").file(data("%PDF-stale"))
+                .param("expectedVersion", "2").with(jwt().jwt(j -> j.subject(owner)))).andExpect(status().isConflict());
+    }
+
     @Test void concurrentSavesAllowOnlyOneWriter() throws Exception {
         String owner = owner("concurrent"); long id = upload(owner, "%PDF-base");
         ExecutorService pool = Executors.newFixedThreadPool(2);

@@ -24,22 +24,15 @@ const { PDFDocument, degrees } = require("pdf-lib");
     const metadata = (id, value) => ({ id, originalName: value.name, contentType: value.type, size: value.bytes.length, folderId: 7, version: value.version ?? 1, checksum: require("node:crypto").createHash("sha256").update(value.bytes).digest("hex"), createdAt: new Date().toISOString() });
     const routeApi = async route => {
       const request = route.request(), pathname = new URL(request.url()).pathname;
-      const versionRoute = pathname.match(/^\/api\/files\/(\d+)\/versions(?:\/(\d+)\/restore)?$/);
-      if (versionRoute) {
-        const id = Number(versionRoute[1]), current = files.get(id), prior = history.get(id);
-        if (request.method() === "GET") return route.fulfill({json: [current, ...prior.slice().reverse()].map((value,index) => ({...metadata(id,value),current:index===0}))});
-        if (versionRoute[2]) {
-          if (request.postDataJSON().expectedVersion !== (current.version ?? 1)) return route.fulfill({status:409,json:{message:"다른 탭에서 파일을 변경했습니다."}});
-          const target = prior.find(value => (value.version ?? 1) === Number(versionRoute[2]));
-          prior.push(current);
-          const value = {...target, version:(current.version ?? 1)+1}; files.set(id,value);
-          return route.fulfill({json:metadata(id,value)});
-        }
-        const form = await new Request("http://localhost/upload", { method: "POST", headers: { "content-type": request.headers()["content-type"] }, body: request.postDataBuffer() }).formData();
-        if (Number(form.get("expectedVersion")) !== (current.version ?? 1)) return route.fulfill({status:409,json:{message:"다른 탭에서 파일을 변경했습니다."}});
-        const file = form.get("file");
-        const value = { name: current.name, type: file.type, bytes: Buffer.from(await file.arrayBuffer()),version:(current.version ?? 1)+1 };
-        prior.push(current); files.set(id,value);
+      const contentRoute = pathname.match(/^\/api\/files\/(\d+)\/content$/);
+      if (contentRoute) {
+        const id=Number(contentRoute[1]), current=files.get(id), prior=history.get(id);
+        const form=await new Request("http://localhost/upload",{method:"POST",headers:{"content-type":request.headers()["content-type"]},body:request.postDataBuffer()}).formData();
+        if(Number(form.get("expectedVersion"))!==(current.version??1)) return route.fulfill({status:409,json:{message:"다른 탭에서 파일을 변경했습니다."}});
+        const file=form.get("file");
+        if(!prior.length) prior.push(current);
+        const value={name:current.name,type:file.type,bytes:Buffer.from(await file.arrayBuffer()),version:(current.version??1)+1};
+        files.set(id,value);
         return route.fulfill({json:metadata(id,value)});
       }
       const match = pathname.match(/^\/api\/files\/(\d+)(\/download)?$/);
@@ -72,7 +65,7 @@ const { PDFDocument, degrees } = require("pdf-lib");
     }
     async function choose(name) {
       await menu();
-      await page.getByRole("button", { name, exact: true }).click();
+      await page.getByRole("dialog").getByRole("button", { name, exact: true }).click();
       if (name !== "텍스트") await page.getByRole("dialog").waitFor({ state: "hidden" });
     }
     async function stroke(number, x1=.2, y1=.2, x2=.5, y2=.2) {
@@ -84,10 +77,43 @@ const { PDFDocument, degrees } = require("pdf-lib");
       return ink(number).evaluate((canvas,p) => canvas.getContext("2d").getImageData(Math.floor(canvas.width*p.x),Math.floor(canvas.height*p.y),1,1).data[3], {x,y});
     }
     async function save() {
-      await menu(); await page.getByRole("button", { name: "버전 저장", exact: true }).click();
+      await menu(); await page.getByRole("button", { name: "저장", exact: true }).click();
       await page.getByRole("dialog").locator(".editorSuccess").waitFor();
     }
     await ready(1);
+    if (process.env.DEVVAULT_PEN_REPRO) {
+      for(const name of ["형광펜","지우개","읽기 / 스크롤","펜"]) {
+        const button=page.locator(".editorQuickTools").getByRole("button",{name,exact:true});
+        await button.click(); assert.equal(await button.getAttribute("aria-pressed"),"true");
+      }
+      for(let i=0;i<30;i++) await stroke(1,.2,.2+i*.008,.4,.2+i*.008);
+      await page.evaluate(() => {
+        window.inkLines=0;
+        const lineTo=CanvasRenderingContext2D.prototype.lineTo;
+        CanvasRenderingContext2D.prototype.lineTo=function(...args){ window.inkLines++; return lineTo.apply(this,args); };
+      });
+      const box=await ink(1).boundingBox();
+      await page.mouse.move(box.x+box.width*.2,box.y+box.height*.5); await page.mouse.down();
+      await page.evaluate(() => { window.inkLines=0; });
+      await page.mouse.move(box.x+box.width*.4,box.y+box.height*.5);
+      const lines=await page.evaluate(() => window.inkLines);
+      await ink(1).evaluate(canvas => canvas.dispatchEvent(new PointerEvent("pointercancel",{bubbles:true,pointerId:77,pointerType:"touch"})));
+      await page.mouse.up();
+      assert.ok(await alpha(1,.3,.5)>0,"a palm cancellation must not cancel the active stroke");
+      await page.locator(".editorViewport").evaluate(e => {e.scrollTop=350;});
+      const before=await page.locator(".editorViewport").evaluate(e=>e.scrollTop);
+      await page.keyboard.press("Control+z");
+      await page.evaluate(() => new Promise(requestAnimationFrame));
+      const after=await page.locator(".editorViewport").evaluate(e=>e.scrollTop);
+      const selection=await sheet(1).evaluate(e=>getComputedStyle(e).userSelect);
+      console.log(JSON.stringify({linesPerMove:lines,undoScrollBefore:before,undoScrollAfter:after,userSelect:selection}));
+      assert.ok(lines<20 && before===after && selection==="none", "ink work must not grow with old strokes; undo must retain scroll; paper must prevent selection");
+      if(process.env.DEVVAULT_SCREENSHOT_DIR) {
+        fs.mkdirSync(process.env.DEVVAULT_SCREENSHOT_DIR,{recursive:true});
+        await page.screenshot({path:path.join(process.env.DEVVAULT_SCREENSHOT_DIR,"pen-toolbar.png")});
+      }
+      return;
+    }
     assert.equal(await page.locator(".editorPaper").count(), 20);
     assert.equal(await page.getByRole("button", { name: "다음 페이지" }).count(), 0);
     assert.ok((await sheet(1).boundingBox()).width >= 800);
@@ -99,7 +125,7 @@ const { PDFDocument, degrees } = require("pdf-lib");
     await touch.send("Input.dispatchTouchEvent", {type:"touchEnd",touchPoints:[]});
     await page.waitForFunction(() => document.querySelector(".editorViewport").scrollTop > 100);
     await scrollTo(1);
-    await menu(); assert.equal(await page.getByRole("button",{name:"버전 저장",exact:true}).isDisabled(),true);
+    await menu(); assert.equal(await page.getByRole("button",{name:"저장",exact:true}).isDisabled(),true);
     await page.keyboard.press("Escape");
     await page.getByRole("dialog").waitFor({state:"hidden"});
     assert.equal(await page.getByRole("button",{name:"편집 메뉴 열기",exact:true}).evaluate(e=>e===document.activeElement),true);
@@ -128,12 +154,14 @@ const { PDFDocument, degrees } = require("pdf-lib");
     await scrollTo(2); await choose("형광펜"); await stroke(2);
     await choose("읽기 / 스크롤"); await scrollTo(1);
     await page.keyboard.press("Control+z");
-    await page.waitForFunction(() => Math.abs(document.querySelector('.editorPaper[data-page="2"]').getBoundingClientRect().top)<2);
+    assert.ok(Math.abs((await sheet(1).boundingBox()).y)<2,"undo must not navigate to the edited page");
     await page.waitForFunction(() => { const canvas=document.querySelector('.editorPaper[data-page="2"] .editorInk'); return canvas.getContext("2d").getImageData(Math.floor(canvas.width*.35),Math.floor(canvas.height*.2),1,1).data[3]===0; });
-    assert.equal(await alpha(2,.35,.2),0,"undo follows the last edit across pages");
+    assert.equal(await alpha(2,.35,.2),0,"undo changes ink without changing pages");
     await page.keyboard.press("Control+y");
+    await scrollTo(2);
+    await page.waitForFunction(() => { const c=document.querySelector('.editorPaper[data-page="2"] .editorInk'); return c.getContext("2d").getImageData(Math.floor(c.width*.35),Math.floor(c.height*.2),1,1).data[3]>0; });
     assert.ok(await alpha(2,.35,.2)>0,"highlight redo restores the stroke");
-    await choose("텍스트"); await page.getByRole("textbox",{name:"추가할 텍스트"}).fill("한글 메모");
+    await scrollTo(2); await choose("텍스트"); await page.getByRole("textbox",{name:"추가할 텍스트"}).fill("한글 메모");
     await page.getByRole("button",{name:"문서에 텍스트 배치"}).click();
     await ink(2).click({position:{x:80,y:180}});
     await save(); assert.equal(files.size,2); assert.equal(files.get(1).version,2); assert.deepEqual(history.get(1)[0].bytes,original);
@@ -141,9 +169,9 @@ const { PDFDocument, degrees } = require("pdf-lib");
     await scrollTo(2); await menu(); await page.locator(".editorMarkList summary").click();
     assert.equal(await page.locator(".editorMarkList > div").count(),2);
     await page.locator(".editorMarkList > div").first().getByRole("button",{name:"삭제",exact:true}).click();
-    await page.getByRole("button",{name:"되돌리기",exact:true}).click();
+    await page.getByRole("dialog").getByRole("button",{name:"되돌리기",exact:true}).click();
     assert.equal(await page.locator(".editorMarkList > div").count(),2,"undo restores deleted annotations");
-    await page.getByRole("button",{name:"다시 실행",exact:true}).click();
+    await page.getByRole("dialog").getByRole("button",{name:"다시 실행",exact:true}).click();
     assert.equal(await page.locator(".editorMarkList > div").count(),1);
     await save(); await ready(1); await scrollTo(2);
     await menu(); assert.equal(await page.locator(".editorMarkList > div").count(),1);
@@ -184,23 +212,19 @@ const { PDFDocument, degrees } = require("pdf-lib");
     await menu();
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth<=window.innerWidth),true);
     assert.equal(await page.getByLabel("가로(px)").inputValue(),"160");
-    // Rollback keeps one logical file and preserves the replaced current version.
-    await page.getByRole("button",{name:"v1 복원",exact:true}).click();
-    await page.waitForEvent("load");
-    await page.waitForFunction(() => document.querySelector('.editorPaper[data-page="1"]')?.dataset.rendered === "true");
-    assert.equal(files.get(2).version,3);
-    assert.deepEqual(files.get(2).bytes,image);
-    assert.equal(files.size,2);
-    assert.equal(history.get(2).length,2);
+    assert.equal(await page.getByRole("region",{name:"버전 이력"}).count(),0);
+    assert.equal(history.get(2).length,1,"only original is retained");
+    // Reset only the mocked fixture for the independent image-transform recovery scenario.
+    files.set(2,{name:"sample.png",type:"image/png",bytes:image,version:3});
     // Image transforms are reversible, including the annotations flattened into them.
     await ready(2); await choose("펜"); await stroke(1);
     await menu(); await page.getByRole("button",{name:"오른쪽 90° 회전"}).click();
     await page.getByRole("dialog").waitFor({state:"hidden"});
     await menu();
     assert.equal(await page.getByLabel("가로(px)").inputValue(),"300");
-    await page.getByRole("button",{name:"되돌리기",exact:true}).click();
+    await page.getByRole("dialog").getByRole("button",{name:"되돌리기",exact:true}).click();
     assert.equal(await page.getByLabel("가로(px)").inputValue(),"400");
-    await page.getByRole("button",{name:"다시 실행",exact:true}).click();
+    await page.getByRole("dialog").getByRole("button",{name:"다시 실행",exact:true}).click();
     assert.equal(await page.getByLabel("가로(px)").inputValue(),"300");
     await page.getByText("이 기기에 임시 저장됨 · 서버 저장은 별도입니다.",{exact:true}).waitFor();
     await page.reload();
@@ -279,18 +303,18 @@ const { PDFDocument, degrees } = require("pdf-lib");
     history.get(1).push(serverVersion);
     files.set(1,{...serverVersion,version:serverVersion.version+1});
     await desktop.getByRole("button",{name:"편집 메뉴 열기",exact:true}).click();
-    await desktop.getByRole("button",{name:"펜",exact:true}).click();
+    await desktop.getByRole("dialog").getByRole("button",{name:"펜",exact:true}).click();
     const desktopInk=desktopFirst.locator(".editorInk"), box=await desktopInk.boundingBox();
     await desktop.mouse.move(box.x+box.width*.2,box.y+box.height*.3); await desktop.mouse.down();
     await desktop.mouse.move(box.x+box.width*.5,box.y+box.height*.3); await desktop.mouse.up();
     await desktop.getByRole("button",{name:"편집 메뉴 열기",exact:true}).click();
-    await desktop.getByRole("button",{name:"버전 저장",exact:true}).click();
+    await desktop.getByRole("button",{name:"저장",exact:true}).click();
     await desktop.getByText("저장 실패: 다른 탭에서 파일을 변경했습니다.",{exact:true}).waitFor();
     assert.equal(await desktop.locator(".editorUnsavedDot").count(),1);
     assert.equal(files.get(1).version,serverVersion.version+1);
     assert.equal(files.size,2);
     await desktopContext.close();
     assert.deepEqual(errors, []);
-    console.log("PASS: tablet edge-to-edge continuous PDF, hidden drawer, native touch scroll, lazy pages, partial erasure/save/reopen, Korean text, image transforms, portrait/landscape/zoom, original preservation, undo/redo shortcuts and branching, desktop page fit, local draft recovery/discard, image transform history, pen-only drawing and finger scrolling, single-file versions and rollback");
+    console.log("PASS: tablet edge-to-edge continuous PDF, hidden drawer, native touch scroll, lazy pages, partial erasure/save/reopen, Korean text, image transforms, portrait/landscape/zoom, original preservation, undo/redo shortcuts and branching, desktop page fit, local draft recovery/discard, image transform history, pen-only drawing and finger scrolling, single-file content save without version UI");
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

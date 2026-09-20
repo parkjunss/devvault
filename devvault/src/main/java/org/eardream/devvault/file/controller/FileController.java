@@ -80,6 +80,12 @@ public class FileController {
         return ResponseEntity.status(HttpStatus.CREATED).body(FileResponse.from(storedFile));
     }
 
+    @PostMapping("/{id}/content")
+    FileResponse saveContent(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
+                             @RequestParam long expectedVersion, @RequestParam("file") MultipartFile file) {
+        return FileResponse.from(fileStorageService.saveContent(jwt.getSubject(), id, expectedVersion, file));
+    }
+
     @PostMapping("/{id}/versions")
     FileResponse saveVersion(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
                              @RequestParam long expectedVersion, @RequestParam("file") MultipartFile file) {

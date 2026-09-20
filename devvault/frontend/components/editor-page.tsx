@@ -30,6 +30,10 @@ export function EditorPage({ document: pdf, image, page, marks, tool, penOnly, c
   const background = useRef<HTMLCanvasElement>(null);
   const foreground = useRef<HTMLCanvasElement>(null);
   const draft = useRef<Mark | null>(null);
+  const strokeCanvas = useRef<HTMLCanvasElement | null>(null);
+  const baseCanvas = useRef<HTMLCanvasElement | null>(null);
+  const paintedMarks = useRef<Mark[] | null>(null);
+  const frame = useRef<number | null>(null);
   const cropStart = useRef<Point | null>(null);
   const pointer = useRef<number | null>(null);
   const [pdfPage, setPdfPage] = useState<PDFPageProxy | null>(null);
@@ -38,7 +42,7 @@ export function EditorPage({ document: pdf, image, page, marks, tool, penOnly, c
   const [displayWidth, setDisplayWidth] = useState(0);
   const [rendered, setRendered] = useState(false);
 
-  useEffect(() => () => { if (pointer.current !== null) onDrawingChange(false); }, [onDrawingChange]);
+  useEffect(() => () => { if (pointer.current !== null) onDrawingChange(false); if (frame.current !== null) cancelAnimationFrame(frame.current); }, [onDrawingChange]);
 
   useEffect(() => {
     if (!pdf) return;
@@ -81,6 +85,7 @@ export function EditorPage({ document: pdf, image, page, marks, tool, penOnly, c
         await task.promise;
       } else buffer.getContext("2d")!.drawImage(image!, 0, 0, buffer.width, buffer.height);
       if (cancelled) return;
+      paintedMarks.current = null;
       canvas.width = ink.width = buffer.width;
       canvas.height = ink.height = buffer.height;
       canvas.getContext("2d")!.drawImage(buffer, 0, 0);
@@ -92,27 +97,52 @@ export function EditorPage({ document: pdf, image, page, marks, tool, penOnly, c
       task?.cancel();
       // Release off-screen pixel buffers; page dimensions keep the continuous scroll position stable.
       canvas.width = canvas.height = ink.width = ink.height = 1;
+      baseCanvas.current = strokeCanvas.current = null;
       if (task) void task.promise.catch(() => undefined).then(() => pdfPage?.cleanup());
     };
   }, [nearby, displayWidth, pdfPage, image, dimensions, onError]);
 
   useEffect(() => {
     if (!rendered) return;
+    if (paintedMarks.current?.length === marks.length && marks.every((mark, i) => mark === paintedMarks.current![i])) return;
+    paintedMarks.current = marks;
     const canvas = foreground.current!, context = canvas.getContext("2d")!;
     context.clearRect(0, 0, canvas.width, canvas.height);
     drawMarks(context, marks, canvas.width, canvas.height);
   }, [marks, rendered]);
 
-  function position(event: PointerEvent<HTMLCanvasElement>): Point {
-    const box = event.currentTarget.getBoundingClientRect();
+  function position(event: { clientX: number; clientY: number; currentTarget?: EventTarget | null }): Point {
+    const box = foreground.current!.getBoundingClientRect();
     return { x: Math.max(0, Math.min(1, (event.clientX - box.left) / box.width)), y: Math.max(0, Math.min(1, (event.clientY - box.top) / box.height)) };
   }
   function repaint() {
     const canvas = foreground.current!, context = canvas.getContext("2d")!;
     context.clearRect(0, 0, canvas.width, canvas.height);
-    drawMarks(context, [...marks, ...(draft.current ? [draft.current] : [])], canvas.width, canvas.height);
+    if (baseCanvas.current) context.drawImage(baseCanvas.current, 0, 0);
+    if (draft.current && strokeCanvas.current) {
+      context.save();
+      context.globalAlpha = draft.current.tool === "highlight" ? .3 : 1;
+      if (draft.current.tool === "erase") context.globalCompositeOperation = "destination-out";
+      context.drawImage(strokeCanvas.current, 0, 0);
+      context.restore();
+    }
   }
-  function cancel() {
+  function schedulePaint() {
+    if (frame.current !== null) return;
+    frame.current = requestAnimationFrame(() => { frame.current = null; repaint(); });
+  }
+  function appendPoint(point: Point) {
+    const mark = draft.current;
+    if (!mark || mark.points.length >= 10000) return;
+    const last = mark.points[mark.points.length - 1];
+    if (last.x === point.x && last.y === point.y) return;
+    mark.points.push(point);
+    const canvas = strokeCanvas.current!;
+    drawMarks(canvas.getContext("2d")!, [{ ...mark, tool: "pen", points: [last, point] }], canvas.width, canvas.height);
+  }
+  function cancel(event: PointerEvent<HTMLCanvasElement>) {
+    if (event.pointerId !== pointer.current) return;
+    if (frame.current !== null) { cancelAnimationFrame(frame.current); frame.current = null; }
     pointer.current = null;
     onDrawingChange(false);
     draft.current = null;
@@ -122,21 +152,40 @@ export function EditorPage({ document: pdf, image, page, marks, tool, penOnly, c
   function pointerDown(event: PointerEvent<HTMLCanvasElement>) {
     if (disabled || !rendered || tool === "read" || !event.isPrimary || event.button !== 0 || pointer.current !== null) return;
     if (penOnly && event.pointerType === "touch") return;
-    if (event.pointerType === "pen") event.preventDefault();
+    event.preventDefault();
     onActive(page);
     if (tool === "text" && !text.trim()) { onError("메뉴에서 추가할 텍스트를 입력해 주세요."); return; }
     pointer.current = event.pointerId;
     onDrawingChange(true);
     event.currentTarget.setPointerCapture(event.pointerId);
+    const canvas = foreground.current!;
+    const base = baseCanvas.current ?? window.document.createElement("canvas");
+    if (base.width !== canvas.width || base.height !== canvas.height) { base.setAttribute("width", String(canvas.width)); base.setAttribute("height", String(canvas.height)); }
+    base.getContext("2d")!.clearRect(0, 0, base.width, base.height);
+    base.getContext("2d")!.drawImage(canvas, 0, 0);
+    baseCanvas.current = base;
     const point = position(event);
     if (tool === "crop") { cropStart.current = point; return; }
     const mark: Mark = { page, tool, color, width: (tool === "text" ? size * 5 + 12 : tool === "highlight" || tool === "erase" ? size * 4 + 10 : size) / 1000, points: [point], ...(tool === "text" ? { text: text.trim() } : {}) };
     if (tool === "text") onChange([...marks, mark]);
-    else { draft.current = mark; repaint(); }
+    else {
+      draft.current = mark;
+      const stroke = strokeCanvas.current ?? window.document.createElement("canvas");
+      if (stroke.width !== canvas.width || stroke.height !== canvas.height) { stroke.setAttribute("width", String(canvas.width)); stroke.setAttribute("height", String(canvas.height)); }
+      stroke.getContext("2d")!.clearRect(0, 0, stroke.width, stroke.height);
+      strokeCanvas.current = stroke;
+      drawMarks(stroke.getContext("2d")!, [{ ...mark, tool: "pen" }], stroke.width, stroke.height);
+      repaint();
+    }
   }
   function pointerMove(event: PointerEvent<HTMLCanvasElement>) {
     if (event.pointerId !== pointer.current) return;
-    if (draft.current && draft.current.points.length < 10000) { draft.current.points.push(position(event)); repaint(); }
+    event.preventDefault();
+    if (draft.current) {
+      const samples = event.nativeEvent.getCoalescedEvents?.() ?? [];
+      for (const sample of samples.length ? samples : [event.nativeEvent]) appendPoint(position(sample));
+      schedulePaint();
+    }
     if (cropStart.current) {
       repaint();
       const point = position(event), start = cropStart.current, canvas = foreground.current!;
@@ -148,10 +197,15 @@ export function EditorPage({ document: pdf, image, page, marks, tool, penOnly, c
   }
   function pointerUp(event: PointerEvent<HTMLCanvasElement>) {
     if (event.pointerId !== pointer.current) return;
+    event.preventDefault();
+    if (frame.current !== null) { cancelAnimationFrame(frame.current); frame.current = null; }
     if (draft.current) {
-      const mark = draft.current;
+      appendPoint(position(event));
+      repaint();
+      const next = [...marks, draft.current];
+      paintedMarks.current = next;
       draft.current = null;
-      onChange([...marks, mark]);
+      onChange(next);
     }
     if (cropStart.current) {
       const start = cropStart.current, end = position(event);
@@ -169,6 +223,6 @@ export function EditorPage({ document: pdf, image, page, marks, tool, penOnly, c
   return <article ref={paper} className="editorPaper" data-page={page} data-rendered={rendered} aria-label={`${page}페이지`} style={{ aspectRatio: `${image?.naturalWidth ?? dimensions.width} / ${image?.naturalHeight ?? dimensions.height}`, "--page-ratio": (image?.naturalWidth ?? dimensions.width) / (image?.naturalHeight ?? dimensions.height) } as CSSProperties}>
     {!rendered && <span className="editorPageLoading">{page}페이지</span>}
     <canvas ref={background} className="editorOriginal" aria-label={pdf ? `${page}페이지 원문` : "원본 이미지"} />
-    <canvas ref={foreground} className="editorInk" data-tool={tool} data-pen-only={penOnly} aria-label={`${page}페이지 필기 영역`} onPointerOver={event => { event.currentTarget.style.touchAction = penOnly && event.pointerType !== "pen" ? "pan-x pan-y pinch-zoom" : "none"; }} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={cancel} />
+    <canvas ref={foreground} className="editorInk" data-tool={tool} data-pen-only={penOnly} aria-label={`${page}페이지 필기 영역`} onPointerOver={event => { if (pointer.current !== null) return; event.currentTarget.style.touchAction = penOnly && event.pointerType !== "pen" ? "pan-x pan-y pinch-zoom" : "none"; }} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={cancel} onLostPointerCapture={cancel} onContextMenu={event => event.preventDefault()} onDragStart={event => event.preventDefault()} />
   </article>;
 }

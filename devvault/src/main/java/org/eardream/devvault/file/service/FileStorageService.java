@@ -143,6 +143,15 @@ public class FileStorageService {
 
     @Transactional
     public StoredFile saveVersion(String email, Long fileId, long expectedVersion, MultipartFile upload) {
+        return saveEditedContent(email, fileId, expectedVersion, upload, true);
+    }
+
+    @Transactional
+    public StoredFile saveContent(String email, Long fileId, long expectedVersion, MultipartFile upload) {
+        return saveEditedContent(email, fileId, expectedVersion, upload, false);
+    }
+
+    private StoredFile saveEditedContent(String email, Long fileId, long expectedVersion, MultipartFile upload, boolean archive) {
         validateOriginalName(upload);
         User owner = lockOwner(email);
         StoredFile file = get(email, fileId);
@@ -154,7 +163,7 @@ public class FileStorageService {
             throw new ResponseStatusException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "PDF 또는 PNG 편집 결과만 저장할 수 있습니다.");
         }
         try (InputStream input = upload.getInputStream()) {
-            return replaceVersion(owner, file, input, upload.getSize(), type, pdf ? "pdf" : "png", true);
+            return replaceVersion(owner, file, input, upload.getSize(), type, pdf ? "pdf" : "png", true, archive);
         } catch (IOException e) { throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "편집본을 저장할 수 없습니다.", e); }
     }
 
@@ -165,7 +174,7 @@ public class FileStorageService {
         checkVersion(file, expectedVersion);
         FileRevision revision = revisions.findByFileIdAndVersion(fileId, version).orElseThrow(FileStorageService::notFound);
         try (InputStream input = Files.newInputStream(resolveStoredPath(revision.getStoredName()))) {
-            return replaceVersion(owner, file, input, revision.getSize(), revision.getContentType(), extensionOf(revision.getOriginalName()), false);
+            return replaceVersion(owner, file, input, revision.getSize(), revision.getContentType(), extensionOf(revision.getOriginalName()), false, true);
         } catch (IOException e) { throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "이전 버전을 복원할 수 없습니다.", e); }
     }
 
@@ -179,8 +188,11 @@ public class FileStorageService {
     }
 
     private StoredFile replaceVersion(User owner, StoredFile file, InputStream input, long expectedSize,
-                                      String type, String extension, boolean validateSignature) {
-        long available = owner.getStorageQuotaBytes() - storedFileRepository.sumStoredBytes(owner.getEmail());
+                                      String type, String extension, boolean validateSignature, boolean archive) {
+        boolean preservePrevious = archive || file.getVersion() == 1;
+        Path previousPath = resolveStoredPath(file.getStoredName());
+        long available = owner.getStorageQuotaBytes() - storedFileRepository.sumStoredBytes(owner.getEmail())
+                + (preservePrevious ? 0 : file.getSize());
         if (expectedSize > available) throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "이전 버전을 포함한 저장소 용량이 부족합니다.");
         String storedName = UUID.randomUUID().toString();
         Path target = resolveStoredPath(storedName);
@@ -212,11 +224,12 @@ public class FileStorageService {
             if (checksum.equals(file.getChecksum())) return file;
             if (storedFileRepository.findFirstByOwnerEmailAndChecksum(owner.getEmail(), checksum).filter(other -> !other.getId().equals(file.getId())).isPresent()
                     || revisions.existsByFileOwnerEmailAndChecksumAndFileIdNot(owner.getEmail(), checksum, file.getId())) throw duplicateFile();
-            revisions.save(FileRevision.archive(file));
+            if (preservePrevious) revisions.save(FileRevision.archive(file));
             moveIntoPlace(temp, target);
             temp = null;
             moved = true;
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override public void afterCommit() { if (!preservePrevious) deletePhysicalFile(previousPath); }
                 @Override public void afterCompletion(int status) { if (status != STATUS_COMMITTED) deletePhysicalFile(target); }
             });
             file.replaceContent(storedName, type, Files.size(target), checksum, extension);
