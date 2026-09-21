@@ -43,10 +43,6 @@ const { changeMarkHistory, readMarks, drawMarks, createPdfCopy, SOURCE_ATTACHMEN
   assert.equal(history.past.length, 100);
   history = changeMarkHistory(history, { type: "reset", marks: pen });
   assert.deepEqual(history, { past: [], present: pen, future: [] });
-  history = changeMarkHistory(history, { type: "reset", marks: [] });
-  for(const mark of strokes) history = changeMarkHistory(history,{type:"update",update:current=>[...current,mark]});
-  assert.deepEqual(history.present,strokes,"queued stroke updates append to the latest state");
-  assert.deepEqual(changeMarkHistory(history,{type:"undo"}).present,[strokes[0]]);
   assert.deepEqual(readMarks(JSON.stringify(strokes), 1), strokes);
   drawMarks(ink.getContext("2d"), strokes, 400, 600);
   assert.equal(ink.getContext("2d").getImageData(200, 120, 1, 1).data[3], 0);

@@ -53,8 +53,7 @@
 .editorMarkList span { flex: 1; min-width: 60px; overflow-wrap: anywhere; white-space: pre-wrap; }
 .editorHome { display: inline-block; padding: 12px 0; color: #2459cc; }
 
-/* Pen and touch share touch-action: allow native gestures only in reading mode. */
-.editorInk[data-pen-only=true]:not([data-tool=read]) { touch-action: none; }
+.editorInk[data-pen-only=true] { touch-action: pan-x pan-y pinch-zoom; }
 
 
 .editorPaper, .editorQuickTools { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }

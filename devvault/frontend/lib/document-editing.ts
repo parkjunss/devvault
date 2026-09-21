@@ -7,15 +7,14 @@ export const MARKS_ATTACHMENT = "devvault-marks-v1.json";
 export const MAX_EDIT_BYTES = 50 * 1024 * 1024;
 
 export type MarkHistory<T = Mark[]> = { past: T[]; present: T; future: T[] };
-export type MarkHistoryAction<T = Mark[]> = { type: "edit" | "reset"; marks: T } | { type: "undo" | "redo" } | { type: "update"; update: (current: T) => T };
+export type MarkHistoryAction<T = Mark[]> = { type: "edit" | "reset"; marks: T } | { type: "undo" | "redo" };
 
 export function changeMarkHistory<T>(state: MarkHistory<T>, action: MarkHistoryAction<T>): MarkHistory<T> {
   if (action.type === "reset") return { past: [], present: action.marks, future: [] };
-  if (action.type === "edit" || action.type === "update") {
-    const next = action.type === "update" ? action.update(state.present) : action.marks;
-    if (next === state.present) return state;
+  if (action.type === "edit") {
+    if (action.marks === state.present) return state;
     // ponytail: retain 100 session-local edits with shared immutable strokes; persist history only if cross-session undo is needed.
-    return { past: [...state.past.slice(-99), state.present], present: next, future: [] };
+    return { past: [...state.past.slice(-99), state.present], present: action.marks, future: [] };
   }
   if (action.type === "undo" && state.past.length) return {
     past: state.past.slice(0, -1), present: state.past[state.past.length - 1], future: [state.present, ...state.future]
