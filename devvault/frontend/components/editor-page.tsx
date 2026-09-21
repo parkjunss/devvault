@@ -36,6 +36,7 @@ export function EditorPage({ document: pdf, image, page, marks, tool, penOnly, c
   const frame = useRef<number | null>(null);
   const cropStart = useRef<Point | null>(null);
   const pointer = useRef<number | null>(null);
+  const touchScroll = useRef<{ pointerId: number; y: number; scrollTop: number } | null>(null);
   const [pdfPage, setPdfPage] = useState<PDFPageProxy | null>(null);
   const [dimensions, setDimensions] = useState({ width: image?.naturalWidth ?? 595, height: image?.naturalHeight ?? 842 });
   const [nearby, setNearby] = useState(false);
@@ -141,16 +142,36 @@ export function EditorPage({ document: pdf, image, page, marks, tool, penOnly, c
     drawMarks(canvas.getContext("2d")!, [{ ...mark, tool: "pen", points: [last, point] }], canvas.width, canvas.height);
   }
   function cancel(event: PointerEvent<HTMLCanvasElement>) {
+    if (event.pointerId === touchScroll.current?.pointerId) {
+      touchScroll.current = null;
+      return;
+    }
     if (event.pointerId !== pointer.current) return;
     if (frame.current !== null) { cancelAnimationFrame(frame.current); frame.current = null; }
+    if (draft.current) {
+      repaint();
+      const next = [...marks, draft.current];
+      paintedMarks.current = next;
+      draft.current = null;
+      onChange(next);
+    } else repaint();
     pointer.current = null;
     onDrawingChange(false);
-    draft.current = null;
     cropStart.current = null;
-    repaint();
+  }
+  function capture(target: HTMLCanvasElement, pointerId: number) {
+    try { target.setPointerCapture(pointerId); } catch { /* Pointer may already have been cancelled by WebKit. */ }
   }
   function pointerDown(event: PointerEvent<HTMLCanvasElement>) {
     if (disabled || !rendered || tool === "read" || event.button !== 0) return;
+    if (penOnly && event.pointerType === "touch") {
+      event.preventDefault();
+      const viewport = event.currentTarget.closest(".editorViewport") as HTMLElement | null;
+      if (!viewport || touchScroll.current) return;
+      touchScroll.current = { pointerId: event.pointerId, y: event.clientY, scrollTop: viewport.scrollTop };
+      capture(event.currentTarget, event.pointerId);
+      return;
+    }
     event.preventDefault();
     if (penOnly && event.pointerType !== "pen") return;
     if (pointer.current !== null || (!event.isPrimary && event.pointerType !== "pen")) return;
@@ -158,7 +179,7 @@ export function EditorPage({ document: pdf, image, page, marks, tool, penOnly, c
     if (tool === "text" && !text.trim()) { onError("메뉴에서 추가할 텍스트를 입력해 주세요."); return; }
     pointer.current = event.pointerId;
     onDrawingChange(true);
-    event.currentTarget.setPointerCapture(event.pointerId);
+    capture(event.currentTarget, event.pointerId);
     const canvas = foreground.current!;
     const base = baseCanvas.current ?? window.document.createElement("canvas");
     if (base.width !== canvas.width || base.height !== canvas.height) { base.setAttribute("width", String(canvas.width)); base.setAttribute("height", String(canvas.height)); }
@@ -180,6 +201,12 @@ export function EditorPage({ document: pdf, image, page, marks, tool, penOnly, c
     }
   }
   function pointerMove(event: PointerEvent<HTMLCanvasElement>) {
+    if (event.pointerId === touchScroll.current?.pointerId) {
+      event.preventDefault();
+      const viewport = event.currentTarget.closest(".editorViewport") as HTMLElement | null;
+      if (viewport) viewport.scrollTop = touchScroll.current.scrollTop + touchScroll.current.y - event.clientY;
+      return;
+    }
     if (event.pointerId !== pointer.current) return;
     event.preventDefault();
     if (draft.current) {
@@ -197,6 +224,12 @@ export function EditorPage({ document: pdf, image, page, marks, tool, penOnly, c
     }
   }
   function pointerUp(event: PointerEvent<HTMLCanvasElement>) {
+    if (event.pointerId === touchScroll.current?.pointerId) {
+      event.preventDefault();
+      touchScroll.current = null;
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+      return;
+    }
     if (event.pointerId !== pointer.current) return;
     event.preventDefault();
     if (frame.current !== null) { cancelAnimationFrame(frame.current); frame.current = null; }

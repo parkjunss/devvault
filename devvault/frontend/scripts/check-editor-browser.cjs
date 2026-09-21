@@ -108,8 +108,28 @@ const { PDFDocument, degrees } = require("pdf-lib");
         } finally { canvas.setPointerCapture = capture; }
       });
       assert.ok(await alpha(1, .35, .4) > 0, "a non-primary pen must draw after palm contact");
-      await choose("읽기 / 스크롤");
-      assert.equal(await ink(1).evaluate(c => getComputedStyle(c).pointerEvents), "none");
+      const beforeScroll = await page.locator(".editorViewport").evaluate(element => element.scrollTop);
+      await ink(1).evaluate(canvas => {
+        const b = canvas.getBoundingClientRect();
+        const send = (type, y) => canvas.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 79, pointerType: "touch", isPrimary: true, button: 0, clientX: b.x + b.width * .7, clientY: y }));
+        send("pointerdown", b.y + b.height * .7);
+        send("pointermove", b.y + b.height * .3);
+        send("pointerup", b.y + b.height * .3);
+      });
+      assert.ok(await page.locator(".editorViewport").evaluate((element, before) => element.scrollTop > before, beforeScroll), "finger must scroll while the pen tool remains selected");
+      await scrollTo(1);
+      await ink(1).evaluate(canvas => {
+        const b = canvas.getBoundingClientRect();
+        const capture = canvas.setPointerCapture;
+        canvas.setPointerCapture = () => {};
+        try {
+          const send = (type, x) => canvas.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 80, pointerType: "pen", isPrimary: false, button: 0, clientX: b.x + b.width * x, clientY: b.y + b.height * .55 }));
+          send("pointerdown", .2);
+          send("pointermove", .4);
+          send("pointercancel", .4);
+        } finally { canvas.setPointerCapture = capture; }
+      });
+      assert.ok(await alpha(1, .3, .55) > 0, "a cancelled pen stroke must retain the points already received");
       return;
     }
     if (process.env.DEVVAULT_PEN_REPRO) {
