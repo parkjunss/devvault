@@ -150,8 +150,8 @@ export function EditorPage({ document: pdf, image, page, marks, tool, penOnly, c
     repaint();
   }
   function pointerDown(event: PointerEvent<HTMLCanvasElement>) {
-    if (disabled || !rendered || tool === "read" || !event.isPrimary || event.button !== 0 || pointer.current !== null) return;
-    if (penOnly && event.pointerType === "touch") return;
+    if (disabled || !rendered || tool === "read" || event.button !== 0 || pointer.current !== null) return;
+    if (penOnly && event.pointerType !== "pen") return;
     event.preventDefault();
     onActive(page);
     if (tool === "text" && !text.trim()) { onError("메뉴에서 추가할 텍스트를 입력해 주세요."); return; }
@@ -223,6 +223,6 @@ export function EditorPage({ document: pdf, image, page, marks, tool, penOnly, c
   return <article ref={paper} className="editorPaper" data-page={page} data-rendered={rendered} aria-label={`${page}페이지`} style={{ aspectRatio: `${image?.naturalWidth ?? dimensions.width} / ${image?.naturalHeight ?? dimensions.height}`, "--page-ratio": (image?.naturalWidth ?? dimensions.width) / (image?.naturalHeight ?? dimensions.height) } as CSSProperties}>
     {!rendered && <span className="editorPageLoading">{page}페이지</span>}
     <canvas ref={background} className="editorOriginal" aria-label={pdf ? `${page}페이지 원문` : "원본 이미지"} />
-    <canvas ref={foreground} className="editorInk" data-tool={tool} data-pen-only={penOnly} aria-label={`${page}페이지 필기 영역`} onPointerOver={event => { if (pointer.current !== null) return; event.currentTarget.style.touchAction = penOnly && event.pointerType !== "pen" ? "pan-x pan-y pinch-zoom" : "none"; }} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={cancel} onLostPointerCapture={cancel} onContextMenu={event => event.preventDefault()} onDragStart={event => event.preventDefault()} />
+    <canvas ref={foreground} className="editorInk" data-tool={tool} data-pen-only={penOnly} aria-label={`${page}페이지 필기 영역`} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={cancel} onLostPointerCapture={cancel} onContextMenu={event => event.preventDefault()} onDragStart={event => event.preventDefault()} />
   </article>;
 }

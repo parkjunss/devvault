@@ -259,6 +259,18 @@ const { PDFDocument, degrees } = require("pdf-lib");
     await touch.send("Input.dispatchMouseEvent",{type:"mouseMoved",x:penBox.x+penBox.width*.5,y:penBox.y+penBox.height*.4,button:"left",buttons:1,pointerType:"pen"});
     await touch.send("Input.dispatchMouseEvent",{type:"mouseReleased",x:penBox.x+penBox.width*.5,y:penBox.y+penBox.height*.4,button:"left",clickCount:1,pointerType:"pen"});
     assert.ok(await alpha(1,.35,.4)>0,"pen draws in pen-only mode");
+    // Repeated pen contacts must work immediately, without waiting for hover or a gesture timeout.
+    await touch.send("Input.dispatchMouseEvent",{type:"mousePressed",x:penBox.x+penBox.width*.2,y:penBox.y+penBox.height*.45,button:"left",clickCount:1,pointerType:"pen"});
+    await touch.send("Input.dispatchMouseEvent",{type:"mouseMoved",x:penBox.x+penBox.width*.5,y:penBox.y+penBox.height*.45,button:"left",buttons:1,pointerType:"pen"});
+    await touch.send("Input.dispatchMouseEvent",{type:"mouseReleased",x:penBox.x+penBox.width*.5,y:penBox.y+penBox.height*.45,button:"left",clickCount:1,pointerType:"pen"});
+    assert.ok(await alpha(1,.35,.45)>0,"a second pen stroke starts immediately");
+    // A palm already resting on the canvas must not own or block the drawing pointer.
+    await touch.send("Input.dispatchTouchEvent",{type:"touchStart",touchPoints:[{x:penBox.x+penBox.width*.8,y:penBox.y+penBox.height*.6}]});
+    await touch.send("Input.dispatchMouseEvent",{type:"mousePressed",x:penBox.x+penBox.width*.2,y:penBox.y+penBox.height*.5,button:"left",clickCount:1,pointerType:"pen"});
+    await touch.send("Input.dispatchMouseEvent",{type:"mouseMoved",x:penBox.x+penBox.width*.5,y:penBox.y+penBox.height*.5,button:"left",buttons:1,pointerType:"pen"});
+    await touch.send("Input.dispatchMouseEvent",{type:"mouseReleased",x:penBox.x+penBox.width*.5,y:penBox.y+penBox.height*.5,button:"left",clickCount:1,pointerType:"pen"});
+    await touch.send("Input.dispatchTouchEvent",{type:"touchEnd",touchPoints:[]});
+    assert.ok(await alpha(1,.35,.5)>0,"pen draws while a palm is resting on the canvas");
     await touch.send("Input.dispatchTouchEvent",{type:"touchStart",touchPoints:[{x:180,y:650}]});
     for(let y=610;y>=250;y-=40) await touch.send("Input.dispatchTouchEvent",{type:"touchMove",touchPoints:[{x:180,y}]});
     await touch.send("Input.dispatchTouchEvent",{type:"touchEnd",touchPoints:[]});
