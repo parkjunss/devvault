@@ -18,14 +18,15 @@ type Props = {
   size: number;
   text: string;
   disabled: boolean;
-  onChange: (marks: Mark[]) => void;
+  onAddMark: (mark: Mark) => boolean;
+  onInputType: (type: string) => void;
   onActive: (page: number) => void;
   onError: (message: string) => void;
   onCrop: (crop: Crop) => void;
   onDrawingChange: (drawing: boolean) => void;
 };
 
-export function EditorPage({ document: pdf, image, page, marks, tool, penOnly, color, size, text, disabled, onChange, onActive, onError, onCrop, onDrawingChange }: Props) {
+export function EditorPage({ document: pdf, image, page, marks, tool, penOnly, color, size, text, disabled, onAddMark, onInputType, onActive, onError, onCrop, onDrawingChange }: Props) {
   const paper = useRef<HTMLElement>(null);
   const background = useRef<HTMLCanvasElement>(null);
   const foreground = useRef<HTMLCanvasElement>(null);
@@ -36,6 +37,7 @@ export function EditorPage({ document: pdf, image, page, marks, tool, penOnly, c
   const frame = useRef<number | null>(null);
   const cropStart = useRef<Point | null>(null);
   const pointer = useRef<number | null>(null);
+  const pointerType = useRef("");
   const [pdfPage, setPdfPage] = useState<PDFPageProxy | null>(null);
   const [dimensions, setDimensions] = useState({ width: image?.naturalWidth ?? 595, height: image?.naturalHeight ?? 842 });
   const [nearby, setNearby] = useState(false);
@@ -142,6 +144,9 @@ export function EditorPage({ document: pdf, image, page, marks, tool, penOnly, c
   }
   function cancel(event: PointerEvent<HTMLCanvasElement>) {
     if (event.pointerId !== pointer.current) return;
+    cancelDrawing();
+  }
+  function cancelDrawing() {
     if (frame.current !== null) { cancelAnimationFrame(frame.current); frame.current = null; }
     pointer.current = null;
     onDrawingChange(false);
@@ -150,12 +155,16 @@ export function EditorPage({ document: pdf, image, page, marks, tool, penOnly, c
     repaint();
   }
   function pointerDown(event: PointerEvent<HTMLCanvasElement>) {
-    if (disabled || !rendered || tool === "read" || event.button !== 0 || pointer.current !== null) return;
+    onInputType(event.pointerType || "unknown");
+    if (disabled || !rendered || tool === "read" || event.button !== 0) return;
+    if (event.pointerType === "pen" && pointer.current !== null && pointerType.current === "touch") cancelDrawing();
+    if (pointer.current !== null) return;
     if (penOnly && event.pointerType !== "pen") return;
     event.preventDefault();
     onActive(page);
     if (tool === "text" && !text.trim()) { onError("메뉴에서 추가할 텍스트를 입력해 주세요."); return; }
     pointer.current = event.pointerId;
+    pointerType.current = event.pointerType;
     onDrawingChange(true);
     event.currentTarget.setPointerCapture(event.pointerId);
     const canvas = foreground.current!;
@@ -167,7 +176,7 @@ export function EditorPage({ document: pdf, image, page, marks, tool, penOnly, c
     const point = position(event);
     if (tool === "crop") { cropStart.current = point; return; }
     const mark: Mark = { page, tool, color, width: (tool === "text" ? size * 5 + 12 : tool === "highlight" || tool === "erase" ? size * 4 + 10 : size) / 1000, points: [point], ...(tool === "text" ? { text: text.trim() } : {}) };
-    if (tool === "text") onChange([...marks, mark]);
+    if (tool === "text") onAddMark(mark);
     else {
       draft.current = mark;
       const stroke = strokeCanvas.current ?? window.document.createElement("canvas");
@@ -202,10 +211,10 @@ export function EditorPage({ document: pdf, image, page, marks, tool, penOnly, c
     if (draft.current) {
       appendPoint(position(event));
       repaint();
-      const next = [...marks, draft.current];
-      paintedMarks.current = next;
+      const mark = draft.current;
       draft.current = null;
-      onChange(next);
+      if (onAddMark(mark)) paintedMarks.current = [...(paintedMarks.current ?? marks), mark];
+      else repaint();
     }
     if (cropStart.current) {
       const start = cropStart.current, end = position(event);

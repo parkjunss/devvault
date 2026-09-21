@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowUUpLeft, ArrowUUpRight, List, X, Pen, Highlighter, Eraser, Hand } from "@phosphor-icons/react";
 import { EditorPage, type EditorTool, type Crop } from "./editor-page";
@@ -53,7 +53,10 @@ export function FileEditor({ fileId }: { fileId: number }) {
   const [pages, setPages] = useState(1);
   const [history, dispatchHistory] = useReducer(changeMarkHistory<EditorSnapshot>, { past: [], present: { marks: [], bitmap: null }, future: [] });
   const { marks, bitmap } = history.present;
+  const pendingMarks = useRef<Mark[]>([]);
+  useLayoutEffect(() => { pendingMarks.current = []; }, [marks]);
   const [penOnly, setPenOnly] = useState(false);
+  const [inputType, setInputType] = useState("");
   const [pendingDraft, setPendingDraft] = useState<EditorDraft | null>(null);
   const [draftLoaded, setDraftLoaded] = useState(false);
   const [draftStatus, setDraftStatus] = useState("");
@@ -228,6 +231,18 @@ export function FileEditor({ fileId }: { fileId: number }) {
     requestAnimationFrame(() => shell.current?.querySelector(`[data-page="${page}"]`)?.scrollIntoView({ block: "start" }));
   }
 
+  function appendMark(mark: Mark) {
+    // Account for every stroke received before React commits the next render.
+    const additions = [...pendingMarks.current, mark];
+    if (marks.length + additions.length > 10000 || [...marks, ...additions].reduce((sum, item) => sum + item.points.length, 0) > 200000 || (mark.text?.length ?? 0) > 1000) {
+      setError("필기 데이터가 너무 큽니다."); return false;
+    }
+    pendingMarks.current.push(mark);
+    dispatchHistory({ type: "update", update: current => ({ ...current, marks: [...current.marks, mark] }) });
+    setSaved(null);
+    return true;
+  }
+
   function updateMarks(next: Mark[]) {
     // Pointer input is normalized at its source; validate untrusted imported data separately.
     if (next.length > 10000 || next.reduce((sum, mark) => sum + mark.points.length, 0) > 200000 || next.some(mark => (mark.text?.length ?? 0) > 1000)) {
@@ -326,7 +341,7 @@ export function FileEditor({ fileId }: { fileId: number }) {
     <div className="editorViewport" role="region" aria-label="문서 연속 보기" tabIndex={0}>
       {!ready && <p className="editorLoading" role="status">{error ? "문서를 열지 못했습니다. 메뉴에서 오류를 확인해 주세요." : "파일을 여는 중..."}</p>}
       {ready && <div className="editorPages" data-scale={typeof zoom === "number" ? "custom" : zoom} style={{ width: typeof zoom === "number" ? `${zoom}%` : "100%" }}>
-        {Array.from({ length: pages }, (_, index) => <EditorPage key={`${index + 1}-${revision}`} document={pdf} image={bitmap} page={index + 1} marks={marks.filter(mark => mark.page === index + 1)} tool={tool} penOnly={penOnly} color={color} size={size} text={text} disabled={busy} onChange={next => updateMarks([...marks.filter(mark => mark.page !== index + 1), ...next])} onActive={setPage} onError={setError} onDrawingChange={onDrawingChange} onCrop={crop => void transformImage("crop", crop)} />)}
+        {Array.from({ length: pages }, (_, index) => <EditorPage key={`${index + 1}-${revision}`} document={pdf} image={bitmap} page={index + 1} marks={marks.filter(mark => mark.page === index + 1)} tool={tool} penOnly={penOnly} color={color} size={size} text={text} disabled={busy} onAddMark={appendMark} onInputType={setInputType} onActive={setPage} onError={setError} onDrawingChange={onDrawingChange} onCrop={crop => void transformImage("crop", crop)} />)}
       </div>}
     </div>
     {!menuOpen && (error || saved) && <div className="editorNotifications">{feedback}</div>}
@@ -340,12 +355,14 @@ export function FileEditor({ fileId }: { fileId: number }) {
       <p className="editorHint">같은 파일에 현재 편집을 저장합니다. PDF 원문은 보존되고 필기만 수정됩니다.</p>
       <fieldset className="editorToolbar" disabled={busy}>
         <legend>읽기·편집 도구</legend>
-        <label><input type="checkbox" checked={penOnly} onChange={event => setPenOnly(event.target.checked)} />펜 전용 모드 (손가락은 스크롤)</label>
+        <label><input type="checkbox" checked={penOnly} onChange={event => setPenOnly(event.target.checked)} />펜 전용 모드 (손 터치 차단)</label>
+        <p className="editorHint" role="status">최근 문서 입력: {inputType === "pen" ? "펜 (pen)" : inputType === "touch" ? "터치 (touch)" : inputType === "mouse" ? "마우스 (mouse)" : "문서를 한 번 눌러 확인해 주세요."}</p>
+        {inputType === "touch" && <p className="editorHint">펜으로 눌렀는데도 터치로 표시된다면 이 기기·브라우저는 펜과 손가락을 구분하지 못합니다. 이 경우 펜 전용 모드를 끄고 손바닥을 화면에서 뗀 채 필기해 주세요.</p>}
         <div className="editorTools">{(["read", "pen", "highlight", "erase", "text"] as const).map(value => <button key={value} aria-pressed={tool === value} onClick={() => chooseTool(value)}>{labels[value]}</button>)}</div>
         <label>색상<input aria-label="색상" type="color" value={color} onChange={event => setColor(event.target.value)} /></label>
         <label>{tool === "erase" ? "지우개 크기" : "굵기"}<input type="range" min="1" max="12" value={size} onChange={event => setSize(Number(event.target.value))} /></label>
         {tool === "text" && <><label>추가할 텍스트<textarea maxLength={1000} value={text} onChange={event => setText(event.target.value)} placeholder="입력 후 문서에서 위치를 눌러 주세요." /></label><button disabled={!text.trim()} onClick={() => setMenuOpen(false)}>문서에 텍스트 배치</button></>}
-        <p className="editorHint">읽기 모드에서 손가락으로 스크롤·확대할 수 있습니다. 도구를 선택하면 문서에 필기합니다. 지우개는 추가한 필기만 부분적으로 지웁니다.</p>
+        <p className="editorHint">펜 전용 모드에서는 손바닥·손가락 입력을 무시합니다. 읽기 버튼을 누르면 손가락으로 스크롤·확대할 수 있습니다. 도구를 선택하면 문서에 필기합니다. 지우개는 추가한 필기만 부분적으로 지웁니다.</p>
         <div className="editorHistoryButtons" role="group" aria-label="편집 기록">{historyButtons}<span>되돌리기 / 다시 실행</span></div>
         {kind === "image" && <div className="editorImageTools">
           <button onClick={() => void transformImage("rotate")}>오른쪽 90° 회전</button><button aria-pressed={tool === "crop"} onClick={() => chooseTool("crop")}>영역 드래그로 자르기</button>

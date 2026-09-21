@@ -81,6 +81,34 @@ const { PDFDocument, degrees } = require("pdf-lib");
       await page.getByRole("dialog").locator(".editorSuccess").waitFor();
     }
     await ready(1);
+    if (process.env.DEVVAULT_PEN_BURST) {
+      await menu(); await page.getByRole("checkbox",{name:/펜 전용 모드/}).check(); await choose("펜");
+      // Deliver separate pen strokes before React's next render, as queued tablet input can arrive.
+      const sample = await ink(1).evaluate(canvas => {
+        const box=canvas.getBoundingClientRect(), start=performance.now();
+        const capture=canvas.setPointerCapture, release=canvas.releasePointerCapture, has=canvas.hasPointerCapture;
+        canvas.setPointerCapture=()=>{}; canvas.releasePointerCapture=()=>{}; canvas.hasPointerCapture=()=>false;
+        const emit=(type,id,kind,x,y) => canvas.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:id,pointerType:kind,isPrimary:kind!=="pen",button:0,buttons:type==="pointerup"?0:1,clientX:box.x+box.width*x,clientY:box.y+box.height*y}));
+        try {
+          emit("pointerdown",77,"touch",.8,.6); // palm stays on the page throughout all pen strokes
+          for(let i=0;i<12;i++) {
+            emit("pointerdown",10+i,"pen",.2,.2+i*.025);
+            emit("pointermove",10+i,"pen",.4,.2+i*.025);
+            emit("pointerup",10+i,"pen",.4,.2+i*.025);
+          }
+          emit("pointerup",77,"touch",.8,.6);
+        } finally { canvas.setPointerCapture=capture; canvas.releasePointerCapture=release; canvas.hasPointerCapture=has; }
+        return {deliveryMs:performance.now()-start,touchAction:getComputedStyle(canvas).touchAction};
+      });
+      await menu(); await page.locator(".editorMarkList summary").click();
+      const count=await page.locator(".editorMarkList > div").count();
+      console.log(JSON.stringify({...sample,deliveredStrokes:12,retainedStrokes:count}));
+      assert.equal(count,12,"rapid pen strokes must all survive while a palm remains down");
+      assert.equal(sample.touchAction,"none","editing must not allow native gestures to cancel pen input");
+      await save(); await ready(1); await menu(); await page.locator(".editorMarkList summary").click();
+      assert.equal(await page.locator(".editorMarkList > div").count(),12,"every burst stroke must survive saving and reopening");
+      return;
+    }
     if (process.env.DEVVAULT_PEN_REPRO) {
       for(const name of ["형광펜","지우개","읽기 / 스크롤","펜"]) {
         const button=page.locator(".editorQuickTools").getByRole("button",{name,exact:true});
@@ -271,6 +299,16 @@ const { PDFDocument, degrees } = require("pdf-lib");
     await touch.send("Input.dispatchMouseEvent",{type:"mouseReleased",x:penBox.x+penBox.width*.5,y:penBox.y+penBox.height*.5,button:"left",clickCount:1,pointerType:"pen"});
     await touch.send("Input.dispatchTouchEvent",{type:"touchEnd",touchPoints:[]});
     assert.ok(await alpha(1,.35,.5)>0,"pen draws while a palm is resting on the canvas");
+    await menu(); await page.getByRole("checkbox",{name:/펜 전용 모드/}).uncheck(); await choose("펜");
+    await touch.send("Input.dispatchTouchEvent",{type:"touchStart",touchPoints:[{x:penBox.x+penBox.width*.8,y:penBox.y+penBox.height*.6}]});
+    await touch.send("Input.dispatchMouseEvent",{type:"mousePressed",x:penBox.x+penBox.width*.2,y:penBox.y+penBox.height*.55,button:"left",clickCount:1,pointerType:"pen"});
+    await touch.send("Input.dispatchMouseEvent",{type:"mouseMoved",x:penBox.x+penBox.width*.5,y:penBox.y+penBox.height*.55,button:"left",buttons:1,pointerType:"pen"});
+    await touch.send("Input.dispatchMouseEvent",{type:"mouseReleased",x:penBox.x+penBox.width*.5,y:penBox.y+penBox.height*.55,button:"left",clickCount:1,pointerType:"pen"});
+    await touch.send("Input.dispatchTouchEvent",{type:"touchEnd",touchPoints:[]});
+    assert.ok(await alpha(1,.35,.55)>0,"pen takes priority over an earlier touch in general input mode");
+    await menu(); await page.getByText("최근 문서 입력: 펜 (pen)",{exact:true}).waitFor();
+    await page.getByRole("button",{name:"편집 메뉴 닫기"}).click();
+    await page.locator(".editorQuickTools").getByRole("button",{name:"읽기 / 스크롤",exact:true}).click();
     await touch.send("Input.dispatchTouchEvent",{type:"touchStart",touchPoints:[{x:180,y:650}]});
     for(let y=610;y>=250;y-=40) await touch.send("Input.dispatchTouchEvent",{type:"touchMove",touchPoints:[{x:180,y}]});
     await touch.send("Input.dispatchTouchEvent",{type:"touchEnd",touchPoints:[]});
