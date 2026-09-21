@@ -81,6 +81,37 @@ const { PDFDocument, degrees } = require("pdf-lib");
       await page.getByRole("dialog").locator(".editorSuccess").waitFor();
     }
     await ready(1);
+    if (process.env.DEVVAULT_TOUCH_REPRO) {
+      await menu(); await page.getByRole("checkbox", { name: "펜 전용 모드" }).check();
+      await choose("펜");
+      const policy = await ink(1).evaluate(canvas => {
+        canvas.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "touch", pointerId: 77 }));
+        const viewport = document.querySelector(".editorViewport");
+        const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+        viewport.dispatchEvent(event);
+        return { touchAction: getComputedStyle(canvas).touchAction, contextBlocked: event.defaultPrevented };
+      });
+      console.log(policy);
+      assert.equal(policy.touchAction, "none", "palm contact must not enable native scrolling during pen input");
+      assert.equal(policy.contextBlocked, true, "document margins must block the long-press menu too");
+      await ink(1).evaluate(canvas => {
+        const b = canvas.getBoundingClientRect();
+        const capture = canvas.setPointerCapture;
+        canvas.setPointerCapture = () => {};
+        try {
+          const send = (type, id, pointerType, x) => canvas.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: id, pointerType, isPrimary: pointerType === "touch", button: 0, clientX: b.x + b.width * x, clientY: b.y + b.height * .4 }));
+          send("pointerdown", 77, "touch", .7);
+          send("pointerdown", 78, "pen", .2);
+          send("pointermove", 78, "pen", .4);
+          send("pointerup", 78, "pen", .5);
+          send("pointerup", 77, "touch", .7);
+        } finally { canvas.setPointerCapture = capture; }
+      });
+      assert.ok(await alpha(1, .35, .4) > 0, "a non-primary pen must draw after palm contact");
+      await choose("읽기 / 스크롤");
+      assert.equal(await ink(1).evaluate(c => getComputedStyle(c).pointerEvents), "none");
+      return;
+    }
     if (process.env.DEVVAULT_PEN_REPRO) {
       for(const name of ["형광펜","지우개","읽기 / 스크롤","펜"]) {
         const button=page.locator(".editorQuickTools").getByRole("button",{name,exact:true});
@@ -259,6 +290,7 @@ const { PDFDocument, degrees } = require("pdf-lib");
     await touch.send("Input.dispatchMouseEvent",{type:"mouseMoved",x:penBox.x+penBox.width*.5,y:penBox.y+penBox.height*.4,button:"left",buttons:1,pointerType:"pen"});
     await touch.send("Input.dispatchMouseEvent",{type:"mouseReleased",x:penBox.x+penBox.width*.5,y:penBox.y+penBox.height*.4,button:"left",clickCount:1,pointerType:"pen"});
     assert.ok(await alpha(1,.35,.4)>0,"pen draws in pen-only mode");
+    await choose("읽기 / 스크롤");
     await touch.send("Input.dispatchTouchEvent",{type:"touchStart",touchPoints:[{x:180,y:650}]});
     for(let y=610;y>=250;y-=40) await touch.send("Input.dispatchTouchEvent",{type:"touchMove",touchPoints:[{x:180,y}]});
     await touch.send("Input.dispatchTouchEvent",{type:"touchEnd",touchPoints:[]});

@@ -53,9 +53,9 @@
 .editorMarkList span { flex: 1; min-width: 60px; overflow-wrap: anywhere; white-space: pre-wrap; }
 .editorHome { display: inline-block; padding: 12px 0; color: #2459cc; }
 
-.editorInk[data-pen-only=true] { touch-action: pan-x pan-y pinch-zoom; }
+.editorViewport:not([data-tool=read]) { touch-action: none; }
 
 
-.editorPaper, .editorQuickTools { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.editorViewport, .editorViewport *, .editorQuickTools { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .editorQuickTools { max-width: calc(100% - 80px); flex-wrap: wrap; justify-content: flex-end; }
 .editorQuickTools button { touch-action: manipulation; }

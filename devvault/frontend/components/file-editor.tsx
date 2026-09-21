@@ -323,7 +323,7 @@ export function FileEditor({ fileId }: { fileId: number }) {
       {([ ["pen", Pen], ["highlight", Highlighter], ["erase", Eraser], ["read", Hand] ] as const).map(([value, Icon]) => <button key={value} aria-label={labels[value]} title={labels[value]} aria-pressed={tool === value} disabled={busy} onClick={() => chooseTool(value)}><Icon size={22} /></button>)}
       {historyButtons}
     </div>
-    <div className="editorViewport" role="region" aria-label="문서 연속 보기" tabIndex={0}>
+    <div className="editorViewport" data-tool={tool} role="region" aria-label="문서 연속 보기" tabIndex={0} onContextMenu={event => event.preventDefault()} onDragStart={event => event.preventDefault()}>
       {!ready && <p className="editorLoading" role="status">{error ? "문서를 열지 못했습니다. 메뉴에서 오류를 확인해 주세요." : "파일을 여는 중..."}</p>}
       {ready && <div className="editorPages" data-scale={typeof zoom === "number" ? "custom" : zoom} style={{ width: typeof zoom === "number" ? `${zoom}%` : "100%" }}>
         {Array.from({ length: pages }, (_, index) => <EditorPage key={`${index + 1}-${revision}`} document={pdf} image={bitmap} page={index + 1} marks={marks.filter(mark => mark.page === index + 1)} tool={tool} penOnly={penOnly} color={color} size={size} text={text} disabled={busy} onChange={next => updateMarks([...marks.filter(mark => mark.page !== index + 1), ...next])} onActive={setPage} onError={setError} onDrawingChange={onDrawingChange} onCrop={crop => void transformImage("crop", crop)} />)}
@@ -340,7 +340,7 @@ export function FileEditor({ fileId }: { fileId: number }) {
       <p className="editorHint">같은 파일에 현재 편집을 저장합니다. PDF 원문은 보존되고 필기만 수정됩니다.</p>
       <fieldset className="editorToolbar" disabled={busy}>
         <legend>읽기·편집 도구</legend>
-        <label><input type="checkbox" checked={penOnly} onChange={event => setPenOnly(event.target.checked)} />펜 전용 모드 (손가락은 스크롤)</label>
+        <label><input type="checkbox" checked={penOnly} onChange={event => setPenOnly(event.target.checked)} />펜 전용 모드 (손 터치 차단)</label>
         <div className="editorTools">{(["read", "pen", "highlight", "erase", "text"] as const).map(value => <button key={value} aria-pressed={tool === value} onClick={() => chooseTool(value)}>{labels[value]}</button>)}</div>
         <label>색상<input aria-label="색상" type="color" value={color} onChange={event => setColor(event.target.value)} /></label>
         <label>{tool === "erase" ? "지우개 크기" : "굵기"}<input type="range" min="1" max="12" value={size} onChange={event => setSize(Number(event.target.value))} /></label>
